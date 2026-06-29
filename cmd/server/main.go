@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultAddr = "http://localhost:8080"
+	defaultAddr = "localhost:8080"
 )
 
 func main() {
@@ -39,9 +39,7 @@ func main() {
 	addr := flag.String("a", defaultAddr, "Listener address")
 	flag.Parse()
 	if *addr != "" && addr != nil {
-		if !strings.HasPrefix(*addr, "http://") {
-			*addr = "http://" + *addr
-		}
+		*addr, _ = strings.CutPrefix(*addr, "http://")
 		cfg.HttpConfig.Address = *addr
 	} else {
 		cfg.HttpConfig.Address = defaultAddr
