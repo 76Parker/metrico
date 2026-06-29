@@ -31,7 +31,7 @@ func registerHttpRoutes(handler *handlers.MetricsHandler) *gin.Engine {
 	router := gin.New()
 	router.LoadHTMLGlob("templates/*")
 	router.POST("/update/:metricType/:metricName/:metricValue", handler.UpdateMetric)
-	router.GET("/update/:metricType/:metricName", handler.GetMetricByName)
+	router.GET("/value/:metricType/:metricName", handler.GetMetricByName)
 	router.GET("/", handler.GetAllMetrics)
 	return router
 }
