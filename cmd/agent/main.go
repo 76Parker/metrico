@@ -26,6 +26,8 @@ var (
 	pollInterval   time.Duration
 	reportInterval time.Duration
 	addr           string
+	pollSeconds    int
+	reportSeconds  int
 )
 
 func main() {
@@ -53,7 +55,10 @@ func main() {
 
 func init() {
 	flag.StringVar(&addr, "a", defaultAddr, "Listener address")
-	flag.DurationVar(&pollInterval, "p", defaultPollInterval, "Poll interval for metric provider")
-	flag.DurationVar(&reportInterval, "r", defaultReportInterval, "Report interval for metric reporter")
+	flag.IntVar(&pollSeconds, "p", int(defaultPollInterval/time.Second), "Poll interval for metric provider in seconds")
+	flag.IntVar(&reportSeconds, "r", int(defaultReportInterval/time.Second), "Report interval for metric reporter in seconds")
 	flag.Parse()
+
+	pollInterval = time.Duration(pollSeconds) * time.Second
+	reportInterval = time.Duration(reportSeconds) * time.Second
 }
