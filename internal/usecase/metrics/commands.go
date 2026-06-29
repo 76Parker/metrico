@@ -9,3 +9,8 @@ type UpdateMetricCommand struct {
 	MetricType metrics.MetricType
 	Value      string
 }
+
+type GetMetricByNameCommand struct {
+	MetricType metrics.MetricType
+	Name       string
+}

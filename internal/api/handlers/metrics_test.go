@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/76Parker/metrico/internal/adapters/memstorage"
 	"github.com/76Parker/metrico/internal/usecase/metrics"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,9 +17,7 @@ import (
  */
 
 func TestUpdateMetric_Valid(t *testing.T) {
-	metricStorage := memstorage.NewMemStorage()
-	metricService := metrics.NewService(metricStorage)
-	metricHandler := NewMetricsHandler(metricService)
+	router := createTestRouter()
 	testCases := []struct {
 		name         string
 		path         string
@@ -26,12 +26,12 @@ func TestUpdateMetric_Valid(t *testing.T) {
 		{
 			name:         "ValidUpdate",
 			path:         "/update/counter/Test/1",
-			expectedCode: 200,
+			expectedCode: http.StatusOK,
 		},
 		{
 			name:         "ValidUpdate_2",
 			path:         "/update/counter/tt/500",
-			expectedCode: 200,
+			expectedCode: http.StatusOK,
 		},
 	}
 	for _, tc := range testCases {
@@ -39,8 +39,8 @@ func TestUpdateMetric_Valid(t *testing.T) {
 			req := httptest.NewRequest("POST", tc.path, nil)
 			rec := httptest.NewRecorder()
 
+			router.ServeHTTP(rec, req)
 			res := rec.Result()
-			metricHandler.UpdateMetric(rec, req)
 			assert.Equal(t, tc.expectedCode, res.StatusCode)
 			res.Body.Close()
 		})
@@ -48,49 +48,48 @@ func TestUpdateMetric_Valid(t *testing.T) {
 }
 
 func TestUpdateMetric_Invalid(t *testing.T) {
-	metricStorage := memstorage.NewMemStorage()
-	metricService := metrics.NewService(metricStorage)
-	metricHandler := NewMetricsHandler(metricService)
+	router := createTestRouter()
 	testCases := []struct {
 		name         string
-		metricName   string
-		metricType   string
-		metricValue  string
+		path         string
 		expectedCode int
 	}{
 		{
 			name:         "InvalidGaugeValue",
-			metricName:   "test",
-			metricType:   "gauge",
-			metricValue:  "12f",
-			expectedCode: 400,
+			path:         "/update/gauge/test/12f",
+			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "InvalidCounterValue",
-			metricName:   "test",
-			metricType:   "counter",
-			metricValue:  "12f",
-			expectedCode: 400,
+			path:         "/update/counter/test/12f",
+			expectedCode: http.StatusBadRequest,
 		},
 		{
 			name:         "InvalidMetricName",
-			metricName:   "",
-			metricType:   "counter",
-			metricValue:  "1",
-			expectedCode: 404,
+			path:         "/update/counter//1",
+			expectedCode: http.StatusNotFound,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/update", nil)
-			req.SetPathValue("metricType", tc.metricType)
-			req.SetPathValue("metricName", tc.metricName)
-			req.SetPathValue("metricValue", tc.metricValue)
+			req := httptest.NewRequest("POST", tc.path, nil)
 			rec := httptest.NewRecorder()
-			metricHandler.UpdateMetric(rec, req)
+			router.ServeHTTP(rec, req)
 			res := rec.Result()
 			assert.Equal(t, tc.expectedCode, res.StatusCode)
 			res.Body.Close()
 		})
 	}
+}
+
+func createTestRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+
+	metricStorage := memstorage.NewMemStorage()
+	metricService := metrics.NewService(metricStorage)
+	metricHandler := NewMetricsHandler(metricService)
+
+	router := gin.New()
+	router.POST("/update/:metricType/:metricName/:metricValue", metricHandler.UpdateMetric)
+	return router
 }
