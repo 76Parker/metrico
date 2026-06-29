@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	ErrMetricNameIsEmpty        = errors.New("metric name is empty")
 	ErrMetricNameNotFound       = errors.New("metric name not found in path parameters")
 	ErrMetricTypeCannotBeEmpty  = errors.New("metric type cannot be empty")
 	ErrMetricValueCannotBeEmpty = errors.New("metric value cannot be empty")
@@ -30,6 +31,8 @@ func ToAPIError(err error) (e error, code int) {
 	// отдаем просто понятную ошибку, без раскрытия внутренних деталей.
 	case metrics.ErrGaugeValueIsNil:
 		return errors.New("invalid gauge value"), http.StatusBadRequest
+	case metrics.ErrMetricNotFound:
+		return errors.New("metric not found"), http.StatusNotFound
 	case metrics.ErrCounterValueIsNil:
 		return errors.New("invalid counter value"), http.StatusBadRequest
 	case metrics.ErrInvalidValueForCounter:
