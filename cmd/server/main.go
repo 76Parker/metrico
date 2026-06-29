@@ -6,11 +6,16 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/76Parker/metrico/internal/app"
 	"github.com/76Parker/metrico/internal/config"
+)
+
+const (
+	defaultAddr = "http://localhost:8080"
 )
 
 func main() {
@@ -31,10 +36,15 @@ func main() {
 		log.Fatal("error config load:", err)
 	}
 
-	addr := flag.String("a", "Listener address", "")
+	addr := flag.String("a", defaultAddr, "Listener address")
 	flag.Parse()
 	if *addr != "" && addr != nil {
+		if !strings.HasPrefix(*addr, "http://") {
+			*addr = "http://" + *addr
+		}
 		cfg.HttpConfig.Address = *addr
+	} else {
+		cfg.HttpConfig.Address = defaultAddr
 	}
 
 	appManager := app.NewLifecycleManager(*cfg)
