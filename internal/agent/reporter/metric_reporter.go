@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -62,7 +63,7 @@ func (r *MetricReporter) Run(ctx context.Context) error {
 		case <-reportTicker.C:
 			metrics, pollCount := r.provider.Metrics()
 			if err := r.sendMetrics(metrics, pollCount); err != nil {
-				return err
+				log.Print(err)
 			}
 		case <-ctx.Done():
 			return ctx.Err()

@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/76Parker/metrico/internal/agent/provider"
@@ -19,7 +21,7 @@ const (
 
 func main() {
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	httpClient := &http.Client{
@@ -28,7 +30,7 @@ func main() {
 	serverAddr := "http://localhost:8080"
 	provider := provider.NewMetricProvider(pollInterval)
 	reporter := reporter.NewMetricReporter(serverAddr, httpClient, provider, reportInterval)
-	if err := reporter.Run(ctx); err != nil {
+	if err := reporter.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatal(err)
 	}
 }
