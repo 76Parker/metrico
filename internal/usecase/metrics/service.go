@@ -50,3 +50,19 @@ func (s *Service) UpdateOrCreateMetric(ctx context.Context, cmd UpdateMetricComm
 		return metrics.ErrInvalidMetricType
 	}
 }
+
+func (s *Service) GetMetricByName(ctx context.Context, cmd GetMetricByNameCommand) (metrics.Metrics, error) {
+	metric, err := s.storage.GetMetricByName(ctx, cmd.Name)
+	if err != nil {
+		return metrics.Metrics{}, err
+	}
+	if metric.Type != cmd.MetricType {
+		return metrics.Metrics{}, metrics.ErrMetricNotFound
+	}
+	return metric, nil
+}
+
+// GetAllMetrics Возвращает все метрики из хранилища
+func (s *Service) GetAllMetrics(ctx context.Context) (map[string]metrics.Metrics, error) {
+	return s.storage.GetAllMetrics(ctx)
+}

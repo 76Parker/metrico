@@ -40,7 +40,7 @@ func (s *MemStorage) UpdateOrCreateMetricByName(_ context.Context, metricName st
 }
 
 // GetMetricByName Возвращает метрику по metricName
-func (s *MemStorage) GetMetricByName(metricName string) (metrics.Metrics, error) {
+func (s *MemStorage) GetMetricByName(_ context.Context, metricName string) (metrics.Metrics, error) {
 	if metricName == "" {
 		return metrics.Metrics{}, metrics.ErrMetricNameIsEmpty
 	}
@@ -85,4 +85,21 @@ func (s *MemStorage) updateOrCreateCounter(metricName string, metric metrics.Met
 		s.metrics[metricName] = metric
 	}
 	return nil
+}
+
+// GetAllMetrics Возвращает все метрики из хранилища
+func (s *MemStorage) GetAllMetrics(ctx context.Context) (map[string]metrics.Metrics, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := s.createMetricSnapshot()
+	return result, nil
+}
+
+func (s *MemStorage) createMetricSnapshot() map[string]metrics.Metrics {
+	result := make(map[string]metrics.Metrics, len(s.metrics))
+	for name, metric := range s.metrics {
+		result[name] = metric
+	}
+	return result
+
 }

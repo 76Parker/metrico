@@ -1,0 +1,5 @@
+{{ range . }}
+  <div>{{ .Name }}: {{ .Value }}</div>
+{{ else }}
+  <p>No metrics</p>
+{{ end }}

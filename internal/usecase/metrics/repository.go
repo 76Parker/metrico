@@ -10,5 +10,6 @@ import (
 
 type metricStorage interface {
 	UpdateOrCreateMetricByName(ctx context.Context, metricName string, metric metrics.Metrics) error
-	GetMetricByName(metricName string) (metrics.Metrics, error)
+	GetMetricByName(ctx context.Context, metricName string) (metrics.Metrics, error)
+	GetAllMetrics(ctx context.Context) (map[string]metrics.Metrics, error)
 }
