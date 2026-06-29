@@ -22,7 +22,11 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
+// UpdateOrCreateMetricByName Обновляет или создает метрику с именем metricName
 func (s *MemStorage) UpdateOrCreateMetricByName(_ context.Context, metricName string, metric metrics.Metrics) error {
+	if metricName == "" {
+		return metrics.ErrMetricNameIsEmpty
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch metric.Type {
@@ -33,6 +37,20 @@ func (s *MemStorage) UpdateOrCreateMetricByName(_ context.Context, metricName st
 	default:
 		return metrics.ErrInvalidMetricType
 	}
+}
+
+// GetMetricByName Возвращает метрику по metricName
+func (s *MemStorage) GetMetricByName(metricName string) (metrics.Metrics, error) {
+	if metricName == "" {
+		return metrics.Metrics{}, metrics.ErrMetricNameIsEmpty
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	metric, ok := s.metrics[metricName]
+	if !ok {
+		return metrics.Metrics{}, metrics.ErrMetricNotFound
+	}
+	return metric, nil
 }
 
 // updateOrCreateGauge Логика обновления/создания для Gauge-метрик: замещение значения на newValue
@@ -49,7 +67,7 @@ func (s *MemStorage) updateOrCreateGauge(metricName string, metric metrics.Metri
 	return nil
 }
 
-// updateCounter Логика обновления/создания для Counter-метрик: увеличение текущего значения на delta
+// updateOrCreateCounter Логика обновления/создания для Counter-метрик: увеличение текущего значения на delta
 func (s *MemStorage) updateOrCreateCounter(metricName string, metric metrics.Metrics) error {
 	if metric.Delta == nil {
 		return metrics.ErrCounterValueIsNil

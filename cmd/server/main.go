@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -20,8 +21,10 @@ func main() {
 		syscall.SIGQUIT,
 	)
 	defer stop()
-
-	configPath := "config.yaml"
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config.yaml"
+	}
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Fatal("error config load:", err)
