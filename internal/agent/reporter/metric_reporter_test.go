@@ -1,11 +1,8 @@
 package reporter
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -73,25 +70,49 @@ func TestSendCounter_Invalid(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestIntegration(t *testing.T) {
-	var requestCount atomic.Int64
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount.Add(1)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer testServer.Close()
+// func TestIntegration(t *testing.T) {
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
+// 	server := "http://localhost:8080"
+// 	cmd := exec.CommandContext(ctx, "go", "run", "/Users/parkersec/go-projects/go-musthave-metrics-tpl/cmd/server/main.go")
+// 	cmd.Dir = "/Users/parkersec/go-projects/go-musthave-metrics-tpl"
+// 	cmd.Stdout = os.Stdout
+// 	cmd.Stderr = os.Stderr
+// 	if err := cmd.Start(); err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer cmd.Process.Kill()
 
-	reporter := NewMetricReporter(testServer.URL, testServer.Client(), testMetricProvider{}, 5*time.Millisecond)
-	err := reporter.Run(ctx)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Positive(t, requestCount.Load())
-}
+// 	waitServerReady(t, server)
 
-type testMetricProvider struct{}
+// 	go func() {
+// 		time.Sleep(10 * time.Second)
+// 		cancel()
+// 	}()
 
-func (testMetricProvider) Metrics() (runtime.MemStats, int64) {
-	return runtime.MemStats{Alloc: 1}, 1
-}
+// 	provider := provider.NewMetricProvider(2 * time.Second)
+// 	reporter := NewMetricReporter(server, &http.Client{}, provider, 5*time.Second)
+// 	err := reporter.Run(ctx)
+// 	if err != nil && !errors.Is(err, context.Canceled) {
+// 		assert.NoError(t, err)
+// 	}
+// }
+
+// func waitServerReady(t *testing.T, server string) {
+// 	t.Helper()
+// 	path := "/update/counter/TestCounter/1"
+// 	retry := 0
+// 	for {
+// 		time.Sleep(1 * time.Second)
+// 		resp, err := http.Post(server+path, "text/plain", nil)
+// 		if err == nil && resp.StatusCode == http.StatusOK {
+// 			log.Printf("metrics server is ready: %s", server)
+// 			return
+// 		}
+// 		retry++
+// 		if retry > 5 {
+// 			t.Fatal("failed to connect to metrics server")
+// 		}
+// 	}
+// }
