@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -28,6 +29,12 @@ func main() {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Fatal("error config load:", err)
+	}
+
+	addr := flag.String("a", "Listener address", "")
+	flag.Parse()
+	if *addr != "" && addr != nil {
+		cfg.HttpConfig.Address = *addr
 	}
 
 	appManager := app.NewLifecycleManager(*cfg)

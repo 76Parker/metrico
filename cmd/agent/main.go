@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,8 +17,15 @@ import (
 )
 
 const (
-	pollInterval   = 2 * time.Second
-	reportInterval = 10 * time.Second
+	defaultPollInterval   = 2 * time.Second
+	defaultReportInterval = 10 * time.Second
+	defaultAddr           = "http://localhost:8080"
+)
+
+var (
+	pollInterval   time.Duration
+	reportInterval time.Duration
+	addr           string
 )
 
 func main() {
@@ -27,10 +36,24 @@ func main() {
 	httpClient := &http.Client{
 		Timeout: 5 * time.Second,
 	}
-	serverAddr := "http://localhost:8080"
+	if addr != "" {
+		if !strings.Contains(addr, "http://") {
+			addr = "http://" + addr
+		}
+	} else {
+		addr = defaultAddr
+	}
+
 	provider := provider.NewMetricProvider(pollInterval)
-	reporter := reporter.NewMetricReporter(serverAddr, httpClient, provider, reportInterval)
+	reporter := reporter.NewMetricReporter(addr, httpClient, provider, reportInterval)
 	if err := reporter.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatal(err)
 	}
+}
+
+func init() {
+	flag.StringVar(&addr, "a", defaultAddr, "Listener address")
+	flag.DurationVar(&pollInterval, "p", defaultPollInterval, "Poll interval for metric provider")
+	flag.DurationVar(&reportInterval, "r", defaultReportInterval, "Report interval for metric reporter")
+	flag.Parse()
 }
