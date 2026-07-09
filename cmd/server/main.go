@@ -27,6 +27,7 @@ func main() {
 		syscall.SIGHUP,
 		syscall.SIGQUIT,
 	)
+	var hostPort string
 	defer stop()
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
@@ -36,15 +37,21 @@ func main() {
 	if err != nil {
 		log.Fatal("error config load:", err)
 	}
-
-	addr := flag.String("a", defaultAddr, "HTTP listener address")
+	addrFromEnv := os.Getenv("ADDRESS")
+	addrFromFlag := flag.String("a", defaultAddr, "HTTP listener address")
 	flag.Parse()
-	if err := validateHostPort(*addr); err != nil {
+
+	if addrFromEnv != "" {
+		hostPort = addrFromEnv
+	} else {
+		hostPort = *addrFromFlag
+	}
+
+	if err := validateHostPort(hostPort); err != nil {
 		log.Fatalf("invalid server address: %v", err)
 	}
-	schemaPrefix := "http://"
-	*addr = schemaPrefix + *addr
 
+	cfg.HttpConfig.Address = hostPort
 	appManager := app.NewLifecycleManager(*cfg)
 
 	errCh := make(chan error, 1)
