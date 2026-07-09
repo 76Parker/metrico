@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -26,6 +27,7 @@ func main() {
 		syscall.SIGHUP,
 		syscall.SIGQUIT,
 	)
+	var hostPort string
 	defer stop()
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
@@ -35,16 +37,21 @@ func main() {
 	if err != nil {
 		log.Fatal("error config load:", err)
 	}
-
-	addr := flag.String("a", defaultAddr, "Listener address")
+	addrFromEnv := os.Getenv("ADDRESS")
+	addrFromFlag := flag.String("a", defaultAddr, "HTTP listener address")
 	flag.Parse()
-	if *addr != "" && addr != nil {
-		*addr, _ = strings.CutPrefix(*addr, "http://")
-		cfg.HttpConfig.Address = *addr
+
+	if addrFromEnv != "" {
+		hostPort = addrFromEnv
 	} else {
-		cfg.HttpConfig.Address = defaultAddr
+		hostPort = *addrFromFlag
 	}
 
+	if err := validateHostPort(hostPort); err != nil {
+		log.Fatalf("invalid server address: %v", err)
+	}
+
+	cfg.HttpConfig.Address = hostPort
 	appManager := app.NewLifecycleManager(*cfg)
 
 	errCh := make(chan error, 1)
@@ -69,4 +76,15 @@ func main() {
 	if err := appManager.Stop(shutdownCtx); err != nil {
 		log.Fatal("error app shutdown:", err)
 	}
+}
+
+func validateHostPort(address string) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf(`address must have the format "host:port"`)
+	}
+	if host == "" {
+		return fmt.Errorf("address cannot be empty")
+	}
+	return nil
 }
