@@ -43,7 +43,7 @@ func (e *envConfig) redefineConfigFromEnv() {
 		reportInterval = time.Duration(e.ReportInterval) * time.Second
 	}
 	if _, ok := os.LookupEnv("POLL_INTERVAL"); ok {
-		pollInterval = time.Duration(e.PollInterval)
+		pollInterval = time.Duration(e.PollInterval) * time.Second
 	}
 }
 
