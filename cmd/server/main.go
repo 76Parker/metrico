@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -36,14 +37,13 @@ func main() {
 		log.Fatal("error config load:", err)
 	}
 
-	addr := flag.String("a", defaultAddr, "Listener address")
+	addr := flag.String("a", defaultAddr, "HTTP listener address")
 	flag.Parse()
-	if *addr != "" && addr != nil {
-		*addr, _ = strings.CutPrefix(*addr, "http://")
-		cfg.HttpConfig.Address = *addr
-	} else {
-		cfg.HttpConfig.Address = defaultAddr
+	if err := validateHostPort(*addr); err != nil {
+		log.Fatalf("invalid server address: %v", err)
 	}
+	schemaPrefix := "http://"
+	*addr = schemaPrefix + *addr
 
 	appManager := app.NewLifecycleManager(*cfg)
 
@@ -69,4 +69,15 @@ func main() {
 	if err := appManager.Stop(shutdownCtx); err != nil {
 		log.Fatal("error app shutdown:", err)
 	}
+}
+
+func validateHostPort(address string) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf(`address must have the format "host:port"`)
+	}
+	if host == "" {
+		return fmt.Errorf("address cannot be empty")
+	}
+	return nil
 }
