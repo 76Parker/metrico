@@ -30,9 +30,9 @@ var (
 )
 
 type envConfig struct {
-	ServerAddress  string        `env:"ADDRESS"`
-	PollInterval   time.Duration `env:"POLL_INTERVAL"`
-	ReportInterval time.Duration `env:"REPORT_INTERVAL"`
+	ServerAddress  string `env:"ADDRESS"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
 }
 
 func (e *envConfig) redefineConfigFromEnv() {
@@ -40,10 +40,10 @@ func (e *envConfig) redefineConfigFromEnv() {
 		addr = e.ServerAddress
 	}
 	if _, ok := os.LookupEnv("REPORT_INTERVAL"); ok {
-		reportInterval = e.ReportInterval
+		reportInterval = time.Duration(e.ReportInterval) * time.Second
 	}
 	if _, ok := os.LookupEnv("POLL_INTERVAL"); ok {
-		pollInterval = e.PollInterval
+		pollInterval = time.Duration(e.PollInterval)
 	}
 }
 
