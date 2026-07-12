@@ -22,7 +22,11 @@ func WithLogging(log logger.Logger) gin.HandlerFunc {
 		}
 
 		if err != nil {
-			log.Error("request failed", append(fields, "error", err.Err)...)
+			if status < 500 && status >= 400 {
+				log.Warn("request failed", append(fields, "error", err.Err)...)
+			} else {
+				log.Error("request not executed", append(fields, "error", err.Err)...)
+			}
 			return
 		}
 

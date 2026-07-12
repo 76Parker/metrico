@@ -50,7 +50,7 @@ func (h *MetricsHandler) UpdateMetric(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	metricKind := metrics.MetricType(strings.ToLower(metricType))
+	metricKind := metrics.MetricType(metricType)
 	var delta *int64
 	var value *float64
 	switch metricKind {
@@ -148,7 +148,7 @@ func (h *MetricsHandler) GetMetricByNameJSON(c *gin.Context) {
 	}
 
 	request.ID = strings.TrimSpace(request.ID)
-	request.Type = metrics.MetricType(strings.ToLower(strings.TrimSpace(string(request.Type))))
+	request.Type = metrics.MetricType(strings.TrimSpace(string(request.Type)))
 	if request.ID == "" {
 		c.Error(apierrs.NewError(metrics.ErrMetricNameIsEmpty.Error(), http.StatusBadRequest))
 		c.Status(http.StatusBadRequest)
