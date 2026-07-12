@@ -7,7 +7,8 @@ import "github.com/76Parker/metrico/internal/domain/metrics"
 type UpdateMetricCommand struct {
 	Name       string
 	MetricType metrics.MetricType
-	Value      string
+	Delta      *int64
+	Value      *float64
 }
 
 type GetMetricByNameCommand struct {

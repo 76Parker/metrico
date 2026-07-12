@@ -13,22 +13,30 @@ import (
 	"github.com/76Parker/metrico/internal/api/handlers"
 	"github.com/76Parker/metrico/internal/config"
 	"github.com/76Parker/metrico/internal/usecase/metrics"
+	"github.com/76Parker/metrico/pkg/logger"
 )
 
 type LifecycleManager struct {
 	closers []io.Closer
 	cfg     config.Config
 	server  *http.Server
+	logger  logger.Logger
 }
 
-func NewLifecycleManager(cfg config.Config) *LifecycleManager {
+func NewLifecycleManager(cfg config.Config) (*LifecycleManager, error) {
 	manager := &LifecycleManager{cfg: cfg}
 	metricHandler := manager.createMetricHandler()
 
-	server := api.NewRouter(metricHandler, cfg.HttpConfig)
-	manager.server = server
+	lvl := "info"
+	logger, err := logger.NewZapLogger(lvl)
+	if err != nil {
+		return nil, err
+	}
 
-	return manager
+	server := api.NewRouter(metricHandler, cfg.HttpConfig, logger)
+	manager.server = server
+	manager.logger = logger
+	return manager, nil
 }
 
 // createMetricHandler Создает HTTP-обработчик для взаимодействия с метриками
@@ -41,6 +49,7 @@ func (lm *LifecycleManager) createMetricHandler() *handlers.MetricsHandler {
 }
 
 func (lm *LifecycleManager) Start() error {
+	lm.logger.Info("Starting HTTP server", "address", lm.cfg.HttpConfig.Address)
 	if err := lm.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
@@ -48,6 +57,7 @@ func (lm *LifecycleManager) Start() error {
 }
 
 func (lm *LifecycleManager) Stop(ctx context.Context) error {
+	lm.logger.Info("Shutting down HTTP server", "address", lm.cfg.HttpConfig.Address)
 
 	var err error
 	if lm.server != nil {

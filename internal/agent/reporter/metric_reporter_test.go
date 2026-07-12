@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/76Parker/metrico/internal/agent/provider"
+	"github.com/76Parker/metrico/internal/domain/metrics"
+	goccyjson "github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 /*
@@ -16,10 +19,21 @@ import (
  */
 
 func TestSendGauge_Valid(t *testing.T) {
-
 	var path string
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var got metrics.Metrics
+		require.NoError(t, goccyjson.NewDecoder(r.Body).Decode(&got))
+		require.Equal(t, metrics.Metrics{
+			ID:    "TestGauge",
+			Type:  metrics.Gauge,
+			Value: float64Pointer(1),
+		}, got)
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer testServer.Close()
@@ -28,7 +42,7 @@ func TestSendGauge_Valid(t *testing.T) {
 	reporter := NewMetricReporter(testServer.URL, testServer.Client(), provider, 10*time.Second)
 	err := reporter.sendGaugeMetric(1.000000, "TestGauge")
 	assert.NoError(t, err)
-	assert.Equal(t, "/update/gauge/TestGauge/1.000000", path)
+	assert.Equal(t, "/update", path)
 }
 
 func TestSendGauge_Invalid(t *testing.T) {
@@ -47,6 +61,18 @@ func TestSendCounter_Valid(t *testing.T) {
 	var path string
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var got metrics.Metrics
+		require.NoError(t, goccyjson.NewDecoder(r.Body).Decode(&got))
+		require.Equal(t, metrics.Metrics{
+			ID:    "TestCounter",
+			Type:  metrics.Counter,
+			Delta: int64Pointer(1),
+		}, got)
+
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer testServer.Close()
@@ -55,7 +81,28 @@ func TestSendCounter_Valid(t *testing.T) {
 	reporter := NewMetricReporter(testServer.URL, testServer.Client(), provider, 10*time.Second)
 	err := reporter.sendCounterMetric(1, "TestCounter")
 	assert.NoError(t, err)
-	assert.Equal(t, "/update/counter/TestCounter/1", path)
+	assert.Equal(t, "/update", path)
+}
+
+func TestSendGauge_InvalidResponseContentType(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
+	provider := provider.NewMetricProvider(2 * time.Second)
+	reporter := NewMetricReporter(testServer.URL, testServer.Client(), provider, 10*time.Second)
+
+	assert.Error(t, reporter.sendGaugeMetric(1, "TestGauge"))
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
+}
+
+func int64Pointer(value int64) *int64 {
+	return &value
 }
 
 func TestSendCounter_Invalid(t *testing.T) {

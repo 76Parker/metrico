@@ -5,12 +5,14 @@ import (
 	"net/http"
 
 	"github.com/76Parker/metrico/internal/api/handlers"
+	"github.com/76Parker/metrico/internal/api/middleware"
 	"github.com/76Parker/metrico/internal/config"
+	"github.com/76Parker/metrico/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(handler *handlers.MetricsHandler, httpCfg config.HTTP) *http.Server {
-	router := registerHttpRoutes(handler)
+func NewRouter(handler *handlers.MetricsHandler, httpCfg config.HTTP, log logger.Logger) *http.Server {
+	router := registerHttpRoutes(handler, log)
 	return newHttpServer(httpCfg, router)
 }
 
@@ -26,11 +28,14 @@ func newHttpServer(cfg config.HTTP, router *gin.Engine) *http.Server {
 	}
 }
 
-func registerHttpRoutes(handler *handlers.MetricsHandler) *gin.Engine {
+func registerHttpRoutes(handler *handlers.MetricsHandler, log logger.Logger) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
+	router.Use(middleware.WithLogging(log))
 	router.LoadHTMLGlob("templates/*")
 	router.POST("/update/:metricType/:metricName/:metricValue", handler.UpdateMetric)
+	router.POST("/value", handler.GetMetricByNameJSON)
+	router.POST("/update", handler.UpdateMetricJSON)
 	router.GET("/value/:metricType/:metricName", handler.GetMetricByName)
 	router.GET("/", handler.GetAllMetrics)
 	return router
