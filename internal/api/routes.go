@@ -34,6 +34,8 @@ func registerHttpRoutes(handler *handlers.MetricsHandler, log logger.Logger) *gi
 	router.Use(middleware.WithLogging(log))
 	router.LoadHTMLGlob("templates/*")
 	router.POST("/update/:metricType/:metricName/:metricValue", handler.UpdateMetric)
+	router.POST("/value", handler.GetMetricByNameJSON)
+	router.POST("/update", handler.UpdateMetricJSON)
 	router.GET("/value/:metricType/:metricName", handler.GetMetricByName)
 	router.GET("/", handler.GetAllMetrics)
 	return router

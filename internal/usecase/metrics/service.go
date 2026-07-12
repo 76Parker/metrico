@@ -5,7 +5,6 @@ package metrics
 
 import (
 	"context"
-	"strconv"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
 )
@@ -23,27 +22,25 @@ func NewService(storage metricStorage) *Service {
 func (s *Service) UpdateOrCreateMetric(ctx context.Context, cmd UpdateMetricCommand) error {
 	switch cmd.MetricType {
 	case metrics.Gauge:
-		v, err := strconv.ParseFloat(cmd.Value, 64)
-		if err != nil {
+		if cmd.Value == nil {
 			return metrics.ErrInvalidValueForGauge
 		}
 		metric := metrics.Metrics{
 			ID:    cmd.Name,
 			Type:  metrics.Gauge,
 			Delta: nil,
-			Value: &v,
+			Value: cmd.Value,
 		}
 		return s.storage.UpdateOrCreateMetricByName(ctx, cmd.Name, metric)
 	case metrics.Counter:
-		v, err := strconv.ParseInt(cmd.Value, 10, 64)
-		if err != nil {
+		if cmd.Delta == nil {
 			return metrics.ErrInvalidValueForCounter
 		}
 		metric := metrics.Metrics{
 			ID:    cmd.Name,
 			Type:  metrics.Counter,
 			Value: nil,
-			Delta: &v,
+			Delta: cmd.Delta,
 		}
 		return s.storage.UpdateOrCreateMetricByName(ctx, cmd.Name, metric)
 	default:

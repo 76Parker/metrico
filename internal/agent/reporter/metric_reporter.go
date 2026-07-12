@@ -1,16 +1,21 @@
 package reporter
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
+	"mime"
 	"net/http"
 	"net/url"
 	"reflect"
 	"runtime"
 	"time"
+
+	"github.com/76Parker/metrico/internal/domain/metrics"
+	goccyjson "github.com/goccy/go-json"
 )
 
 // gaugeMetricNames содержит список имен Gauge-метрик которые необходимо отправлять на сервер
@@ -110,21 +115,34 @@ func (r *MetricReporter) sendMetrics(metrics runtime.MemStats, pollCount int64) 
 }
 
 func (r *MetricReporter) sendGaugeMetric(metricValue float64, metricName string) error {
-	requestURL := r.metricURL("gauge", metricName, fmt.Sprintf("%f", metricValue))
-	resp, err := r.client.Post(requestURL, "text/plain", nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-	return nil
+	return r.sendMetric(metrics.Metrics{
+		ID:    metricName,
+		Type:  metrics.Gauge,
+		Value: &metricValue,
+	})
 }
 
 func (r *MetricReporter) sendCounterMetric(metricValue int64, metricName string) error {
-	requestURL := r.metricURL("counter", metricName, fmt.Sprintf("%d", metricValue))
-	resp, err := r.client.Post(requestURL, "text/plain", nil)
+	return r.sendMetric(metrics.Metrics{
+		ID:    metricName,
+		Type:  metrics.Counter,
+		Delta: &metricValue,
+	})
+}
+
+func (r *MetricReporter) sendMetric(metric metrics.Metrics) error {
+	body, err := goccyjson.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("marshal metric: %w", err)
+	}
+
+	request, err := http.NewRequest(http.MethodPost, r.updateURL(), bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create update request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	resp, err := r.client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -132,17 +150,21 @@ func (r *MetricReporter) sendCounterMetric(metricValue int64, metricName string)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
+
+	contentType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil {
+		return fmt.Errorf("parse response content type: %w", err)
+	}
+	if contentType != "application/json" {
+		return fmt.Errorf("unexpected response content type: %s", contentType)
+	}
+
 	return nil
 }
 
-func (r *MetricReporter) metricURL(metricType, metricName, metricValue string) string {
+func (r *MetricReporter) updateURL() string {
 	requestURL := *r.url
-	requestURL.Path = fmt.Sprintf(
-		"/update/%s/%s/%s",
-		url.PathEscape(metricType),
-		url.PathEscape(metricName),
-		url.PathEscape(metricValue),
-	)
+	requestURL.Path = "/update"
 	requestURL.RawQuery = ""
 	return requestURL.String()
 }
