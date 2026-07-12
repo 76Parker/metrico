@@ -177,6 +177,13 @@ func TestUpdateMetricJSONSetsJSONContentType(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, response.Code)
 	require.Contains(t, response.Header().Get("Content-Type"), "application/json")
+	var got domainmetrics.Metrics
+	require.NoError(t, goccyjson.Unmarshal(response.Body.Bytes(), &got))
+	require.Equal(t, domainmetrics.Metrics{
+		ID:    "RandomValue",
+		Type:  domainmetrics.Gauge,
+		Value: float64Pointer(1.5),
+	}, got)
 }
 
 func float64Pointer(value float64) *float64 {

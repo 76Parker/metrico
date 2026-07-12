@@ -132,7 +132,24 @@ func (h *MetricsHandler) UpdateMetricJSON(c *gin.Context) {
 		c.Status(apiErr.Status)
 		return
 	}
-	c.Status(http.StatusOK)
+	updatedMetric, err := h.svc.GetMetricByName(c.Request.Context(), metricsusecase.GetMetricByNameCommand{
+		Name:       cmd.Name,
+		MetricType: cmd.MetricType,
+	})
+	if err != nil {
+		apiErr := apierrs.NewErrorFromService(err)
+		c.Error(apiErr)
+		c.Status(apiErr.Status)
+		return
+	}
+
+	response, err := goccyjson.Marshal(updatedMetric)
+	if err != nil {
+		c.Error(apierrs.NewError("failed to serialize metric", http.StatusInternalServerError))
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	c.Data(http.StatusOK, "application/json", response)
 }
 
 func (h *MetricsHandler) GetMetricByNameJSON(c *gin.Context) {
