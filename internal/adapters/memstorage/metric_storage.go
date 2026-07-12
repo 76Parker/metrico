@@ -4,6 +4,7 @@ package memstorage
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
@@ -96,10 +97,5 @@ func (s *MemStorage) GetAllMetrics(ctx context.Context) (map[string]metrics.Metr
 }
 
 func (s *MemStorage) createMetricSnapshot() map[string]metrics.Metrics {
-	result := make(map[string]metrics.Metrics, len(s.metrics))
-	for name, metric := range s.metrics {
-		result[name] = metric
-	}
-	return result
-
+	return maps.Clone(s.metrics)
 }

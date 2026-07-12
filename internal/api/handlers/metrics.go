@@ -3,7 +3,7 @@ package handlers
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -39,10 +39,12 @@ func (h *MetricsHandler) UpdateMetric(c *gin.Context) {
 	metricName := strings.TrimSpace(c.Param("metricName"))
 	metricValue := strings.TrimSpace(c.Param("metricValue"))
 	if metricName == "" {
+		c.Error(apierrs.NewError("metric name is empty", http.StatusNotFound))
 		c.Status(http.StatusNotFound)
 		return
 	}
 	if err := h.validateParams(metricType, metricName, metricValue); err != nil {
+		c.Error(apierrs.NewError(err.Error(), http.StatusBadRequest))
 		c.Status(http.StatusBadRequest)
 		return
 	}
@@ -52,8 +54,9 @@ func (h *MetricsHandler) UpdateMetric(c *gin.Context) {
 		Value:      metricValue,
 	}
 	if err := h.svc.UpdateOrCreateMetric(c.Request.Context(), cmd); err != nil {
-		_, code := apierrs.ToAPIError(err)
-		c.Status(code)
+		apiErr := apierrs.NewErrorFromService(err)
+		c.Error(apiErr)
+		c.Status(apiErr.Status)
 		return
 	}
 	c.Header("Content-Type", "text/plain; charset=utf-8")
@@ -61,19 +64,19 @@ func (h *MetricsHandler) UpdateMetric(c *gin.Context) {
 }
 func (h *MetricsHandler) validateParams(metricType, metricName, metricValue string) error {
 	if utf8.RuneCountInString(metricType) > h.maxPathParamLen {
-		return apierrs.ErrMetricTypeTooLong
+		return fmt.Errorf("metric type is too long: max len is %d", h.maxPathParamLen)
 	}
 	if utf8.RuneCountInString(metricName) > h.maxPathParamLen {
-		return apierrs.ErrMetricNameTooLong
+		return fmt.Errorf("metric name is too long: max len is %d", h.maxPathParamLen)
 	}
 	if utf8.RuneCountInString(metricValue) > h.maxPathParamLen {
-		return apierrs.ErrMetricValueTooLong
+		return fmt.Errorf("metric value is too long: max len is %d", h.maxPathParamLen)
 	}
 	if metricType == "" {
-		return apierrs.ErrMetricTypeCannotBeEmpty
+		return fmt.Errorf("metric type cannot be empty")
 	}
 	if metricValue == "" {
-		return apierrs.ErrMetricValueCannotBeEmpty
+		return fmt.Errorf("metric value cannot be empty")
 	}
 	return nil
 }
@@ -81,11 +84,13 @@ func (h *MetricsHandler) validateParams(metricType, metricName, metricValue stri
 func (h *MetricsHandler) GetMetricByName(c *gin.Context) {
 	metricName := strings.TrimSpace(c.Param("metricName"))
 	if metricName == "" {
+		c.Error(apierrs.NewError("metric name is empty", http.StatusNotFound))
 		c.Status(http.StatusNotFound)
 		return
 	}
 	metricType := strings.TrimSpace(c.Param("metricType"))
 	if metricType == "" {
+		c.Error(apierrs.NewError("metric type is empty", http.StatusBadRequest))
 		c.Status(http.StatusBadRequest)
 		return
 	}
@@ -95,11 +100,9 @@ func (h *MetricsHandler) GetMetricByName(c *gin.Context) {
 	}
 	metric, err := h.svc.GetMetricByName(c.Request.Context(), cmd)
 	if err != nil {
-		if errors.Is(err, metrics.ErrMetricNotFound) {
-			c.Status(http.StatusNotFound)
-		} else {
-			c.Status(http.StatusInternalServerError)
-		}
+		apiErr := apierrs.NewErrorFromService(err)
+		c.Error(apiErr)
+		c.Status(apiErr.Status)
 		return
 	}
 	c.Header("Content-Type", "text/plain; charset=utf-8")

@@ -52,7 +52,10 @@ func main() {
 	}
 
 	cfg.HttpConfig.Address = hostPort
-	appManager := app.NewLifecycleManager(*cfg)
+	appManager, err := app.NewLifecycleManager(*cfg)
+	if err != nil {
+		log.Fatal("error creating app manager:", err)
+	}
 
 	errCh := make(chan error, 1)
 
@@ -64,7 +67,7 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		log.Println("shutdown signal received")
+		// log.Println("shutdown signal received")
 
 	case err := <-errCh:
 		log.Fatal("error app start:", err)
