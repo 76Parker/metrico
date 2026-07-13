@@ -32,6 +32,7 @@ func registerHttpRoutes(handler *handlers.MetricsHandler, log logger.Logger) *gi
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(middleware.WithLogging(log))
+	router.Use(middleware.Compress())
 	router.LoadHTMLGlob("templates/*")
 	router.POST("/update/:metricType/:metricName/:metricValue", handler.UpdateMetric)
 	router.POST("/value", handler.GetMetricByNameJSON)
