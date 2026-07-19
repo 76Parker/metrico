@@ -2,6 +2,7 @@ package filestorage_test
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestStorage_Restore(t *testing.T) {
 	}{
 		{
 			name:            "valid metrics",
-			fileStoragePath: "/Users/parkersec/go-projects/go-musthave-metrics-tpl/internal/adapters/filestorage/tests/valid_metrics.json",
+			fileStoragePath: filepath.Join("tests", "valid_metrics.json"),
 			want: []metrics.Metrics{
 				{ID: "requests_total", Type: "counter", Delta: new(int64(120))},
 				{ID: "errors_total", Type: "counter", Delta: new(int64(7))},
@@ -77,7 +78,7 @@ func TestStorage_Restore(t *testing.T) {
 		},
 		{
 			name:            "invalid metrics",
-			fileStoragePath: "/Users/parkersec/go-projects/go-musthave-metrics-tpl/internal/adapters/filestorage/tests/invalid_metrics.json",
+			fileStoragePath: filepath.Join("tests", "invalid_metrics.json"),
 			want:            nil,
 			wantErr:         true,
 		},
