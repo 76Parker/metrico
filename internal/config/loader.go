@@ -9,7 +9,8 @@ import (
 )
 
 type Config struct {
-	HttpConfig HTTP `yaml:"http"`
+	HttpConfig            HTTP `yaml:"http"`
+	SnapshotServiceConfig SnapshotService
 }
 
 func Load(configPath string) (*Config, error) {

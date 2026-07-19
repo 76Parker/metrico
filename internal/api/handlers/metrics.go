@@ -18,25 +18,31 @@ import (
 )
 
 type metricService interface {
-	UpdateOrCreateMetric(ctx context.Context, cmd metricsusecase.UpdateMetricCommand) error
-	GetMetricByName(ctx context.Context, cmd metricsusecase.GetMetricByNameCommand) (metrics.Metrics, error)
-	GetAllMetrics(ctx context.Context) (map[string]metrics.Metrics, error)
+	UpdateOrCreateMetric(ctx context.Context, cmd metricsusecase.UpdateCommand) error
+	GetMetricByName(ctx context.Context, cmd metricsusecase.GetCommand) (metrics.Metrics, error)
+	GetAllMetrics(ctx context.Context) ([]metrics.Metrics, error)
+}
+
+type snapshotService interface {
+	UpdateSnapshot(ctx context.Context) error
 }
 
 type MetricsHandler struct {
-	svc             metricService
+	metricSvc       metricService
+	snapshotSvc     snapshotService
 	maxPathParamLen int
 }
 
-func NewMetricsHandler(svc metricService) *MetricsHandler {
+func NewMetricsHandler(metricSvc metricService, snapshotSvc snapshotService) *MetricsHandler {
 	maxPathParamLen := 64
 	return &MetricsHandler{
-		svc:             svc,
+		metricSvc:       metricSvc,
+		snapshotSvc:     snapshotSvc,
 		maxPathParamLen: maxPathParamLen,
 	}
 }
 
-func (h *MetricsHandler) UpdateMetric(c *gin.Context) {
+func (h *MetricsHandler) Update(c *gin.Context) {
 	metricType := strings.TrimSpace(c.Param("metricType"))
 	metricName := strings.TrimSpace(c.Param("metricName"))
 	metricValue := strings.TrimSpace(c.Param("metricValue"))
@@ -75,13 +81,19 @@ func (h *MetricsHandler) UpdateMetric(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	cmd := metricsusecase.UpdateMetricCommand{
+	cmd := metricsusecase.UpdateCommand{
 		Name:       metricName,
 		MetricType: metricKind,
 		Delta:      delta,
 		Value:      value,
 	}
-	if err := h.svc.UpdateOrCreateMetric(c.Request.Context(), cmd); err != nil {
+	if err := h.metricSvc.UpdateOrCreateMetric(c.Request.Context(), cmd); err != nil {
+		apiErr := apierrs.NewErrorFromService(err)
+		c.Error(apiErr)
+		c.Status(apiErr.Status)
+		return
+	}
+	if err := h.snapshotSvc.UpdateSnapshot(c.Request.Context()); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
 		c.Status(apiErr.Status)
@@ -109,7 +121,7 @@ func (h *MetricsHandler) validateParams(metricType, metricName, metricValue stri
 	return nil
 }
 
-func (h *MetricsHandler) UpdateMetricJSON(c *gin.Context) {
+func (h *MetricsHandler) UpdateFromJSON(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 	decoder := goccyjson.NewDecoder(c.Request.Body)
@@ -120,21 +132,21 @@ func (h *MetricsHandler) UpdateMetricJSON(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	cmd := metricsusecase.UpdateMetricCommand{
+	cmd := metricsusecase.UpdateCommand{
 		Name:       metric.ID,
 		MetricType: metric.Type,
 		Delta:      metric.Delta,
 		Value:      metric.Value,
 	}
-	if err := h.svc.UpdateOrCreateMetric(c.Request.Context(), cmd); err != nil {
+	if err := h.metricSvc.UpdateOrCreateMetric(c.Request.Context(), cmd); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
 		c.Status(apiErr.Status)
 		return
 	}
-	updatedMetric, err := h.svc.GetMetricByName(c.Request.Context(), metricsusecase.GetMetricByNameCommand{
-		Name:       cmd.Name,
-		MetricType: cmd.MetricType,
+	updatedMetric, err := h.metricSvc.GetMetricByName(c.Request.Context(), metricsusecase.GetCommand{
+		Name:       metric.ID,
+		MetricType: metric.Type,
 	})
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
@@ -149,10 +161,16 @@ func (h *MetricsHandler) UpdateMetricJSON(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
+	if err := h.snapshotSvc.UpdateSnapshot(c.Request.Context()); err != nil {
+		apiErr := apierrs.NewErrorFromService(err)
+		c.Error(apiErr)
+		c.Status(apiErr.Status)
+		return
+	}
 	c.Data(http.StatusOK, "application/json", response)
 }
 
-func (h *MetricsHandler) GetMetricByNameJSON(c *gin.Context) {
+func (h *MetricsHandler) GetFromJSON(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 	decoder := goccyjson.NewDecoder(c.Request.Body)
 	decoder.DisallowUnknownFields()
@@ -177,7 +195,7 @@ func (h *MetricsHandler) GetMetricByNameJSON(c *gin.Context) {
 		return
 	}
 
-	metric, err := h.svc.GetMetricByName(c.Request.Context(), metricsusecase.GetMetricByNameCommand{
+	metric, err := h.metricSvc.GetMetricByName(c.Request.Context(), metricsusecase.GetCommand{
 		Name:       request.ID,
 		MetricType: request.Type,
 	})
@@ -197,7 +215,7 @@ func (h *MetricsHandler) GetMetricByNameJSON(c *gin.Context) {
 	c.Data(http.StatusOK, "application/json; charset=utf-8", response)
 }
 
-func (h *MetricsHandler) GetMetricByName(c *gin.Context) {
+func (h *MetricsHandler) GetByName(c *gin.Context) {
 	metricName := strings.TrimSpace(c.Param("metricName"))
 	if metricName == "" {
 		c.Error(apierrs.NewError("metric name is empty", http.StatusNotFound))
@@ -210,11 +228,11 @@ func (h *MetricsHandler) GetMetricByName(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	cmd := metricsusecase.GetMetricByNameCommand{
+	cmd := metricsusecase.GetCommand{
 		Name:       metricName,
 		MetricType: metrics.MetricType(metricType),
 	}
-	metric, err := h.svc.GetMetricByName(c.Request.Context(), cmd)
+	metric, err := h.metricSvc.GetMetricByName(c.Request.Context(), cmd)
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
@@ -237,24 +255,24 @@ type metricResponse struct {
 	Value any
 }
 
-func (h *MetricsHandler) GetAllMetrics(c *gin.Context) {
-	metricsSnapshot, err := h.svc.GetAllMetrics(c.Request.Context())
+func (h *MetricsHandler) GetAll(c *gin.Context) {
+	metricsSnapshot, err := h.metricSvc.GetAllMetrics(c.Request.Context())
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
 	resp := make([]metricResponse, 0, len(metricsSnapshot))
-	for name, metric := range metricsSnapshot {
+	for _, metric := range metricsSnapshot {
 		switch metric.Type {
 		case metrics.Gauge:
 			resp = append(resp, metricResponse{
-				Name:  name,
+				Name:  metric.ID,
 				Value: *metric.Value,
 			})
 		case metrics.Counter:
 			resp = append(resp, metricResponse{
-				Name:  name,
+				Name:  metric.ID,
 				Value: *metric.Delta,
 			})
 		}

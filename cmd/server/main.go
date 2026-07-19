@@ -91,7 +91,13 @@ func main() {
 	}
 
 	cfg.HttpConfig.Address = hostPort
-	appManager, err := app.NewLifecycleManager(*cfg)
+	cfg.SnapshotServiceConfig = config.SnapshotService{
+		StoreInterval:   time.Duration(storeInterval) * time.Second,
+		FileStoragePath: fileStoragePath,
+		Restore:         restore,
+		SchemaPath:      "/Users/parkersec/go-projects/go-musthave-metrics-tpl/internal/adapters/filestorage/snapshotschema/metrics-snapshot-v1.schema.json",
+	}
+	appManager, err := app.NewLifecycleManager(ctx, *cfg)
 	if err != nil {
 		log.Fatal("error creating app manager:", err)
 	}

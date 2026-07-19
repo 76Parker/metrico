@@ -49,7 +49,7 @@ func TestUpdateGauge_Valid(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreateMetricByName(t.Context(), tc.metricName, tc.metric)
+			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
 			assert.NoError(t, err)
 		})
 	}
@@ -106,7 +106,7 @@ func TestUpdateGauge_Invalid(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreateMetricByName(t.Context(), tc.metricName, tc.metric)
+			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
 			assert.ErrorIs(t, err, tc.requiredErr)
 		})
 	}
@@ -147,7 +147,7 @@ func TestUpdateCounter_Valid(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreateMetricByName(t.Context(), tc.metricName, tc.metric)
+			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
 			assert.NoError(t, err)
 		})
 	}
@@ -204,7 +204,7 @@ func TestUpdateCounter_Invalid(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreateMetricByName(t.Context(), tc.metricName, tc.metric)
+			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
 			assert.ErrorIs(t, err, tc.requiredErr)
 		})
 	}

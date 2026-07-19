@@ -10,16 +10,16 @@ import (
 )
 
 type Service struct {
-	storage metricStorage
+	metricsStorage metricStorage
 }
 
 func NewService(storage metricStorage) *Service {
 	return &Service{
-		storage: storage,
+		metricsStorage: storage,
 	}
 }
 
-func (s *Service) UpdateOrCreateMetric(ctx context.Context, cmd UpdateMetricCommand) error {
+func (s *Service) UpdateOrCreateMetric(ctx context.Context, cmd UpdateCommand) error {
 	switch cmd.MetricType {
 	case metrics.Gauge:
 		if cmd.Value == nil {
@@ -31,7 +31,7 @@ func (s *Service) UpdateOrCreateMetric(ctx context.Context, cmd UpdateMetricComm
 			Delta: nil,
 			Value: cmd.Value,
 		}
-		return s.storage.UpdateOrCreateMetricByName(ctx, cmd.Name, metric)
+		return s.metricsStorage.UpdateOrCreate(ctx, cmd.Name, metric)
 	case metrics.Counter:
 		if cmd.Delta == nil {
 			return metrics.ErrInvalidValueForCounter
@@ -42,14 +42,14 @@ func (s *Service) UpdateOrCreateMetric(ctx context.Context, cmd UpdateMetricComm
 			Value: nil,
 			Delta: cmd.Delta,
 		}
-		return s.storage.UpdateOrCreateMetricByName(ctx, cmd.Name, metric)
+		return s.metricsStorage.UpdateOrCreate(ctx, cmd.Name, metric)
 	default:
 		return metrics.ErrInvalidMetricType
 	}
 }
 
-func (s *Service) GetMetricByName(ctx context.Context, cmd GetMetricByNameCommand) (metrics.Metrics, error) {
-	metric, err := s.storage.GetMetricByName(ctx, cmd.Name)
+func (s *Service) GetMetricByName(ctx context.Context, cmd GetCommand) (metrics.Metrics, error) {
+	metric, err := s.metricsStorage.Get(ctx, cmd.Name)
 	if err != nil {
 		return metrics.Metrics{}, err
 	}
@@ -60,6 +60,6 @@ func (s *Service) GetMetricByName(ctx context.Context, cmd GetMetricByNameComman
 }
 
 // GetAllMetrics Возвращает все метрики из хранилища
-func (s *Service) GetAllMetrics(ctx context.Context) (map[string]metrics.Metrics, error) {
-	return s.storage.GetAllMetrics(ctx)
+func (s *Service) GetAllMetrics(ctx context.Context) ([]metrics.Metrics, error) {
+	return s.metricsStorage.GetAll(ctx)
 }
