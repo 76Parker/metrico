@@ -20,7 +20,7 @@ import (
 // Default values for flags
 const (
 	defaultAddr            = "localhost:8080"
-	defaultFileStoragePath = "/var/lib/metrico/metrics.json"
+	defaultFileStoragePath = "metrics.json"
 	defaultStoreInterval   = 300
 	defaultRestore         = false
 )

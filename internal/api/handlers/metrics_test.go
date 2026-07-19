@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -198,11 +199,15 @@ func float64Pointer(value float64) *float64 {
 func createTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
-	storagePath := "/Users/parkersec/go-projects/go-musthave-metrics-tpl/metrics.json"
+	testStoragePath, err := os.CreateTemp("", "test-storage-path-*")
+	if err != nil {
+		log.Fatal("failed to create test storage: %w", err)
+	}
+	defer os.Remove(testStoragePath.Name())
 
 	metricStorage := memstorage.NewMemStorage()
 	metricService := metrics.NewService(metricStorage)
-	snapshotStorage, err := filestorage.NewStorage(storagePath)
+	snapshotStorage, err := filestorage.NewStorage(testStoragePath.Name())
 	if err != nil {
 		log.Fatal("failed to create snapshot storage: %w", err)
 	}

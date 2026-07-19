@@ -1,0 +1,7 @@
+[
+  {
+    "id": "RandomValue",
+    "type": "gauge",
+    "value": 1.5
+  }
+]
