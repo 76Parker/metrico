@@ -36,10 +36,9 @@ func TestStorage_Save(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 	fileStoragePath := tmpFile.Name()
-	schemaPath := "/Users/parkersec/go-projects/go-musthave-metrics-tpl/internal/adapters/filestorage/snapshotschema/metrics-snapshot-v1.schema.json"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := filestorage.NewStorage(fileStoragePath, schemaPath)
+			s, err := filestorage.NewStorage(fileStoragePath)
 			if err != nil {
 				t.Fatalf("NewStorage() failed: %v", err)
 			}
@@ -83,10 +82,9 @@ func TestStorage_Restore(t *testing.T) {
 			wantErr:         true,
 		},
 	}
-	schemaPath := "/Users/parkersec/go-projects/go-musthave-metrics-tpl/internal/adapters/filestorage/snapshotschema/metrics-snapshot-v1.schema.json"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := filestorage.NewStorage(tt.fileStoragePath, schemaPath)
+			s, err := filestorage.NewStorage(tt.fileStoragePath)
 			if err != nil {
 				t.Fatalf("NewStorage() failed: %v", err)
 			}

@@ -95,7 +95,6 @@ func main() {
 		StoreInterval:   time.Duration(storeInterval) * time.Second,
 		FileStoragePath: fileStoragePath,
 		Restore:         restore,
-		SchemaPath:      "/Users/parkersec/go-projects/go-musthave-metrics-tpl/internal/adapters/filestorage/snapshotschema/metrics-snapshot-v1.schema.json",
 	}
 	appManager, err := app.NewLifecycleManager(ctx, *cfg)
 	if err != nil {

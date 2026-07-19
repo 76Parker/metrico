@@ -15,6 +15,5 @@ type HTTP struct {
 type SnapshotService struct {
 	StoreInterval   time.Duration
 	FileStoragePath string
-	SchemaPath      string
 	Restore         bool
 }

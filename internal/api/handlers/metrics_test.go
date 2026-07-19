@@ -198,12 +198,11 @@ func float64Pointer(value float64) *float64 {
 func createTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
-	schemaPath := "/Users/parkersec/go-projects/go-musthave-metrics-tpl/internal/adapters/filestorage/snapshotschema/metrics-snapshot-v1.schema.json"
 	storagePath := "/Users/parkersec/go-projects/go-musthave-metrics-tpl/metrics.json"
 
 	metricStorage := memstorage.NewMemStorage()
 	metricService := metrics.NewService(metricStorage)
-	snapshotStorage, err := filestorage.NewStorage(storagePath, schemaPath)
+	snapshotStorage, err := filestorage.NewStorage(storagePath)
 	if err != nil {
 		log.Fatal("failed to create snapshot storage: %w", err)
 	}

@@ -3,6 +3,7 @@ package filestorage
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"sync"
 
@@ -19,12 +20,22 @@ type Storage struct {
 	mu              sync.Mutex
 }
 
-func NewStorage(fileStoragePath, schemaPath string) (*Storage, error) {
+func NewStorage(fileStoragePath string) (*Storage, error) {
 
 	compiler := jsonschema.NewCompiler()
-	schema, err := compiler.Compile(schemaPath)
+	schemaDocument, err := jsonschema.UnmarshalJSON(bytes.NewReader(snapshotschema.MetricsSnapshotV1SchemaJSON))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse embedded snapshot schema: %w", err)
+	}
+
+	const schemaURL = "metrics-snapshot-v1.schema.json"
+	if err := compiler.AddResource(schemaURL, schemaDocument); err != nil {
+		return nil, fmt.Errorf("register embedded snapshot schema: %w", err)
+	}
+
+	schema, err := compiler.Compile(schemaURL)
+	if err != nil {
+		return nil, fmt.Errorf("compile embedded snapshot schema: %w", err)
 	}
 
 	return &Storage{
@@ -55,16 +66,7 @@ func (s *Storage) Save(ctx context.Context, metricsSlice []metrics.Metrics) erro
 	if err != nil {
 		return err
 	}
-	if err := s.eraseFileContent(); err != nil {
-		if os.IsNotExist(err) {
-			return snapshot.ErrStorageFileNotFound
-		}
-		return err
-	}
 	if err := s.writeSnapshot(data); err != nil {
-		if os.IsNotExist(err) {
-			return snapshot.ErrStorageFileNotFound
-		}
 		return err
 	}
 	return nil
@@ -107,13 +109,6 @@ func (s *Storage) Restore(ctx context.Context) ([]metrics.Metrics, error) {
 		metricsSlice = append(metricsSlice, m)
 	}
 	return metricsSlice, nil
-}
-
-func (s *Storage) eraseFileContent() error {
-	if err := os.Truncate(s.fileStoragePath, 0); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *Storage) writeSnapshot(snapshotData []byte) error {

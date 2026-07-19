@@ -28,7 +28,7 @@ type LifecycleManager struct {
 func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleManager, error) {
 	manager := &LifecycleManager{cfg: cfg}
 
-	snapshotStorage, err := filestorage.NewStorage(cfg.SnapshotServiceConfig.FileStoragePath, cfg.SnapshotServiceConfig.SchemaPath)
+	snapshotStorage, err := filestorage.NewStorage(cfg.SnapshotServiceConfig.FileStoragePath)
 	if err != nil {
 		return nil, err
 	}
