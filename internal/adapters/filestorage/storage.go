@@ -80,7 +80,9 @@ func (s *Storage) Restore(ctx context.Context) ([]metrics.Metrics, error) {
 		}
 		return nil, err
 	}
-
+	if len(bytes.TrimSpace(rawFile)) == 0 {
+		return []metrics.Metrics{}, nil
+	}
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(rawFile))
 	if err != nil {
 		return nil, err
