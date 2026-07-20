@@ -9,7 +9,6 @@ import (
 
 	"github.com/76Parker/metrico/internal/adapters/filestorage/snapshotschema"
 	"github.com/76Parker/metrico/internal/domain/metrics"
-	"github.com/76Parker/metrico/internal/usecase/snapshot"
 	goccyjson "github.com/goccy/go-json"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -76,7 +75,7 @@ func (s *Storage) Restore(ctx context.Context) ([]metrics.Metrics, error) {
 	rawFile, err := os.ReadFile(s.fileStoragePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, snapshot.ErrStorageFileNotFound
+			return []metrics.Metrics{}, nil
 		}
 		return nil, err
 	}
