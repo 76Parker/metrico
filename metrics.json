@@ -1,0 +1,22 @@
+[
+  {
+    "id": "requests_total",
+    "type": "counter",
+    "delta": 120
+  },
+  {
+    "id": "errors_total",
+    "type": "counter",
+    "delta": 7
+  },
+  {
+    "id": "temperature",
+    "type": "gauge",
+    "value": 23.7
+  },
+  {
+    "id": "memory_usage",
+    "type": "gauge",
+    "value": 68.4
+  }
+]

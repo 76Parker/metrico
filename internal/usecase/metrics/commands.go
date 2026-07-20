@@ -4,14 +4,14 @@ package metrics
 
 import "github.com/76Parker/metrico/internal/domain/metrics"
 
-type UpdateMetricCommand struct {
+type UpdateCommand struct {
 	Name       string
 	MetricType metrics.MetricType
 	Delta      *int64
 	Value      *float64
 }
 
-type GetMetricByNameCommand struct {
+type GetCommand struct {
 	MetricType metrics.MetricType
 	Name       string
 }

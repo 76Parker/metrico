@@ -11,3 +11,9 @@ type HTTP struct {
 	MaxHeaderBytes    int           `yaml:"max_header_bytes"`
 	IdleTimeout       time.Duration `yaml:"idle_timeout"`
 }
+
+type SnapshotService struct {
+	StoreInterval   time.Duration
+	FileStoragePath string
+	Restore         bool
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Metrics",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/Metric"
+  },
+  "$defs": {
+    "Metric": {
+      "title": "Metric",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["counter", "gauge"]
+        },
+        "value": {
+          "type": "number"
+        },
+        "delta": {
+          "type": "integer"
+        }
+      },
+      "required": ["id", "type"],
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "counter"
+            }
+          },
+          "required": ["delta"]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "gauge"
+            }
+          },
+          "required": ["value"]
+        }
+      ],
+      "additionalProperties": false
+    }
+  }
+}

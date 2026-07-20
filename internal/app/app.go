@@ -8,11 +8,13 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/76Parker/metrico/internal/adapters/filestorage"
 	"github.com/76Parker/metrico/internal/adapters/memstorage"
 	"github.com/76Parker/metrico/internal/api"
 	"github.com/76Parker/metrico/internal/api/handlers"
 	"github.com/76Parker/metrico/internal/config"
 	"github.com/76Parker/metrico/internal/usecase/metrics"
+	"github.com/76Parker/metrico/internal/usecase/snapshot"
 	"github.com/76Parker/metrico/pkg/logger"
 )
 
@@ -23,9 +25,24 @@ type LifecycleManager struct {
 	logger  logger.Logger
 }
 
-func NewLifecycleManager(cfg config.Config) (*LifecycleManager, error) {
+func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleManager, error) {
 	manager := &LifecycleManager{cfg: cfg}
-	metricHandler := manager.createMetricHandler()
+
+	snapshotStorage, err := filestorage.NewStorage(cfg.SnapshotServiceConfig.FileStoragePath)
+	if err != nil {
+		return nil, err
+	}
+	metricStorage := memstorage.NewMemStorage()
+	snapshotSvc := snapshot.NewService(metricStorage, snapshotStorage, cfg.SnapshotServiceConfig.StoreInterval)
+	metricSvc := metrics.NewService(metricStorage)
+	metricHandler := manager.createMetricHandler(snapshotSvc, metricSvc)
+
+	if cfg.SnapshotServiceConfig.Restore {
+		if err := snapshotSvc.Restore(ctx); err != nil {
+			return nil, err
+		}
+	}
+	snapshotSvc.Run(ctx)
 
 	lvl := "info"
 	logger, err := logger.NewZapLogger(lvl)
@@ -41,10 +58,8 @@ func NewLifecycleManager(cfg config.Config) (*LifecycleManager, error) {
 
 // createMetricHandler Создает HTTP-обработчик для взаимодействия с метриками
 // Иницализируем все зависимости для обработчика с нижних слоев до верхнего
-func (lm *LifecycleManager) createMetricHandler() *handlers.MetricsHandler {
-	metricStorage := memstorage.NewMemStorage()
-	metricService := metrics.NewService(metricStorage)
-	metricHandler := handlers.NewMetricsHandler(metricService)
+func (lm *LifecycleManager) createMetricHandler(snapshotSvc *snapshot.Service, metricSvc *metrics.Service) *handlers.MetricsHandler {
+	metricHandler := handlers.NewMetricsHandler(metricSvc, snapshotSvc)
 	return metricHandler
 }
 

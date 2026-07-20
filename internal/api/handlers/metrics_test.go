@@ -1,14 +1,20 @@
 package handlers
 
 import (
+	"context"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/76Parker/metrico/internal/adapters/filestorage"
 	"github.com/76Parker/metrico/internal/adapters/memstorage"
 	domainmetrics "github.com/76Parker/metrico/internal/domain/metrics"
 	"github.com/76Parker/metrico/internal/usecase/metrics"
+	"github.com/76Parker/metrico/internal/usecase/snapshot"
 	"github.com/gin-gonic/gin"
 	goccyjson "github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
@@ -193,13 +199,26 @@ func float64Pointer(value float64) *float64 {
 func createTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
+	testStoragePath, err := os.CreateTemp("", "test-storage-path-*")
+	if err != nil {
+		log.Fatal("failed to create test storage: %w", err)
+	}
+	defer os.Remove(testStoragePath.Name())
+
 	metricStorage := memstorage.NewMemStorage()
 	metricService := metrics.NewService(metricStorage)
-	metricHandler := NewMetricsHandler(metricService)
+	snapshotStorage, err := filestorage.NewStorage(testStoragePath.Name())
+	if err != nil {
+		log.Fatal("failed to create snapshot storage: %w", err)
+	}
+	snapshotService := snapshot.NewService(metricStorage, snapshotStorage, 0*time.Second)
+	ctx := context.Background()
+	snapshotService.Run(ctx)
+	metricHandler := NewMetricsHandler(metricService, snapshotService)
 
 	router := gin.New()
-	router.POST("/update/:metricType/:metricName/:metricValue", metricHandler.UpdateMetric)
-	router.POST("/update", metricHandler.UpdateMetricJSON)
-	router.POST("/value", metricHandler.GetMetricByNameJSON)
+	router.POST("/update/:metricType/:metricName/:metricValue", metricHandler.Update)
+	router.POST("/update", metricHandler.UpdateFromJSON)
+	router.POST("/value", metricHandler.GetFromJSON)
 	return router
 }

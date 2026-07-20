@@ -4,7 +4,6 @@ package memstorage
 
 import (
 	"context"
-	"maps"
 	"sync"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
@@ -23,8 +22,8 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-// UpdateOrCreateMetricByName Обновляет или создает метрику с именем metricName
-func (s *MemStorage) UpdateOrCreateMetricByName(_ context.Context, metricName string, metric metrics.Metrics) error {
+// UpdateOrCreate Обновляет или создает метрику с именем metricName
+func (s *MemStorage) UpdateOrCreate(_ context.Context, metricName string, metric metrics.Metrics) error {
 	if metricName == "" {
 		return metrics.ErrMetricNameIsEmpty
 	}
@@ -40,8 +39,8 @@ func (s *MemStorage) UpdateOrCreateMetricByName(_ context.Context, metricName st
 	}
 }
 
-// GetMetricByName Возвращает метрику по metricName
-func (s *MemStorage) GetMetricByName(_ context.Context, metricName string) (metrics.Metrics, error) {
+// Get Возвращает метрику по metricName
+func (s *MemStorage) Get(_ context.Context, metricName string) (metrics.Metrics, error) {
 	if metricName == "" {
 		return metrics.Metrics{}, metrics.ErrMetricNameIsEmpty
 	}
@@ -52,6 +51,16 @@ func (s *MemStorage) GetMetricByName(_ context.Context, metricName string) (metr
 		return metrics.Metrics{}, metrics.ErrMetricNotFound
 	}
 	return metric, nil
+}
+
+func (s *MemStorage) Load(_ context.Context, metricsSlice []metrics.Metrics) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.metrics = make(map[string]metrics.Metrics, len(metricsSlice))
+	for _, metric := range metricsSlice {
+		s.metrics[metric.ID] = metric
+	}
+	return nil
 }
 
 // updateOrCreateGauge Логика обновления/создания для Gauge-метрик: замещение значения на newValue
@@ -88,14 +97,18 @@ func (s *MemStorage) updateOrCreateCounter(metricName string, metric metrics.Met
 	return nil
 }
 
-// GetAllMetrics Возвращает все метрики из хранилища
-func (s *MemStorage) GetAllMetrics(ctx context.Context) (map[string]metrics.Metrics, error) {
+// GetAll Возвращает все метрики из хранилища
+func (s *MemStorage) GetAll(ctx context.Context) ([]metrics.Metrics, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	result := s.createMetricSnapshot()
 	return result, nil
 }
 
-func (s *MemStorage) createMetricSnapshot() map[string]metrics.Metrics {
-	return maps.Clone(s.metrics)
+func (s *MemStorage) createMetricSnapshot() []metrics.Metrics {
+	result := make([]metrics.Metrics, 0, len(s.metrics))
+	for _, v := range s.metrics {
+		result = append(result, v)
+	}
+	return result
 }
