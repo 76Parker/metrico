@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
+	"github.com/76Parker/metrico/pkg/logger"
 )
 
 type updateMode int
@@ -24,12 +25,14 @@ type Service struct {
 	restoreOnce   sync.Once
 	runOnce       sync.Once
 
+	log logger.Logger
+
 	cancellation context.CancelFunc
 
 	isRunning bool
 }
 
-func NewService(metricsStore metricsStore, snapshotStore snapshotStore, storeInterval time.Duration) *Service {
+func NewService(metricsStore metricsStore, snapshotStore snapshotStore, storeInterval time.Duration, log logger.Logger) *Service {
 	// На уровне создания сервиса определяем режим обновления
 	var mode updateMode
 	switch storeInterval {
@@ -45,6 +48,7 @@ func NewService(metricsStore metricsStore, snapshotStore snapshotStore, storeInt
 		updateMode:    mode,
 		restoreOnce:   sync.Once{},
 		runOnce:       sync.Once{},
+		log:           log,
 		isRunning:     false,
 	}
 }
@@ -114,10 +118,12 @@ func (s *Service) asyncUpdate(ctx context.Context) {
 		case <-ticker.C:
 			metrics, err := s.metricsStore.GetAll(ctx)
 			if err != nil {
-				return
+				s.log.Error("[ASYNC UPDATE] Failed to retrieve all metrics", "err", err.Error())
+				continue
 			}
 			if err := s.snapshotStore.Save(ctx, metrics); err != nil {
-				return
+				s.log.Error("[ASYNC UPDATE] Failed to save snapshot", "err", err.Error())
+				continue
 			}
 		case <-ctx.Done():
 			return

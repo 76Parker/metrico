@@ -1,0 +1,14 @@
+[
+  {
+    "id": "test_gauge",
+    "type": "gauge",
+    "delta": 10,
+    "value": 10.5
+  },
+  {
+    "id": "test_counter",
+    "type": "counter",
+    "delta": 10,
+    "value": 10
+  }
+]

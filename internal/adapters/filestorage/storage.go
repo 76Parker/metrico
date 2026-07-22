@@ -5,7 +5,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
+
+	"github.com/google/uuid"
 
 	"github.com/76Parker/metrico/internal/adapters/filestorage/snapshotschema"
 	"github.com/76Parker/metrico/internal/domain/metrics"
@@ -50,14 +53,10 @@ func (s *Storage) Save(ctx context.Context, metricsSlice []metrics.Metrics) erro
 	metricSnapshot := make(snapshotschema.MetricsSnapshotV1, 0, len(metricsSlice))
 	for _, metric := range metricsSlice {
 		m := snapshotschema.Metric{
-			Id:   metric.ID,
-			Type: snapshotschema.MetricType(metric.Type),
-		}
-		switch metric.Type {
-		case metrics.Gauge:
-			m.Value = metric.Value
-		case metrics.Counter:
-			m.Delta = metric.Delta
+			Id:    metric.ID,
+			Type:  snapshotschema.MetricType(metric.Type),
+			Delta: metric.Delta,
+			Value: metric.Value,
 		}
 		metricSnapshot = append(metricSnapshot, m)
 	}
@@ -65,7 +64,14 @@ func (s *Storage) Save(ctx context.Context, metricsSlice []metrics.Metrics) erro
 	if err != nil {
 		return err
 	}
-	if err := s.writeSnapshot(data); err != nil {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	if err := s.schema.Validate(doc); err != nil {
+		return err
+	}
+	if err := s.createNewSnapshot(data); err != nil {
 		return err
 	}
 	return nil
@@ -98,23 +104,56 @@ func (s *Storage) Restore(ctx context.Context) ([]metrics.Metrics, error) {
 	metricsSlice := make([]metrics.Metrics, 0, snapshotLen)
 	for _, metric := range snapshotFromFile {
 		m := metrics.Metrics{
-			ID:   metric.Id,
-			Type: metrics.MetricType(metric.Type),
-		}
-		switch metric.Type {
-		case snapshotschema.MetricTypeGauge:
-			m.Value = metric.Value
-		case snapshotschema.MetricTypeCounter:
-			m.Delta = metric.Delta
+			ID:    metric.Id,
+			Type:  metrics.MetricType(metric.Type),
+			Delta: metric.Delta,
+			Value: metric.Value,
 		}
 		metricsSlice = append(metricsSlice, m)
 	}
 	return metricsSlice, nil
 }
 
-func (s *Storage) writeSnapshot(snapshotData []byte) error {
-	if err := os.WriteFile(s.fileStoragePath, snapshotData, 0o644); err != nil {
+func (s *Storage) createNewSnapshot(snapshotData []byte) error {
+	dir := filepath.Dir(s.fileStoragePath)
+	snapshotID := uuid.New().String()
+	newSnapshotName := dir + "/snapshot_" + snapshotID + ".json"
+	snapshotFile, err := os.Create(newSnapshotName)
+	if err != nil {
+		return err
+	}
+	if _, err := snapshotFile.Write(snapshotData); err != nil {
+		deleteSnapshot(newSnapshotName)
+		return err
+	}
+	if err := snapshotFile.Sync(); err != nil {
+		deleteSnapshot(newSnapshotName)
+		return err
+	}
+	if err := snapshotFile.Close(); err != nil {
+		deleteSnapshot(newSnapshotName)
+		return err
+	}
+	if err := os.Rename(newSnapshotName, s.fileStoragePath); err != nil {
+		deleteSnapshot(newSnapshotName)
+		return err
+	}
+	dirFile, err := os.Open(dir)
+	if err != nil {
+		deleteSnapshot(newSnapshotName)
+		return err
+	}
+	if err := dirFile.Sync(); err != nil {
+		deleteSnapshot(newSnapshotName)
+		return err
+	}
+	if err := dirFile.Close(); err != nil {
+		deleteSnapshot(newSnapshotName)
 		return err
 	}
 	return nil
+}
+
+func deleteSnapshot(snapshotPath string) {
+	os.Remove(snapshotPath)
 }
