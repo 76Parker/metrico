@@ -10,12 +10,15 @@ import (
 
 	"github.com/76Parker/metrico/internal/adapters/filestorage"
 	"github.com/76Parker/metrico/internal/adapters/memstorage"
+	"github.com/76Parker/metrico/internal/adapters/postgres"
 	"github.com/76Parker/metrico/internal/api"
 	"github.com/76Parker/metrico/internal/api/handlers"
 	"github.com/76Parker/metrico/internal/config"
+	"github.com/76Parker/metrico/internal/usecase/health"
 	"github.com/76Parker/metrico/internal/usecase/metrics"
 	"github.com/76Parker/metrico/internal/usecase/snapshot"
 	"github.com/76Parker/metrico/pkg/logger"
+	"github.com/jackc/pgx/v5"
 )
 
 type LifecycleManager struct {
@@ -43,6 +46,14 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 	metricSvc := metrics.NewService(metricStorage)
 	metricHandler := manager.createMetricHandler(snapshotSvc, metricSvc)
 
+	db, err := pgx.Connect(ctx, cfg.Postgres.DSN)
+	if err != nil {
+		return nil, err
+	}
+	healthRepo := postgres.NewRepository(db)
+	healthSvc := health.NewService(healthRepo)
+	healthHandler := manager.createHealthHandler(logger, healthSvc)
+
 	if cfg.SnapshotServiceConfig.Restore {
 		if err := snapshotSvc.Restore(ctx); err != nil {
 			return nil, err
@@ -50,7 +61,7 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 	}
 	snapshotSvc.Run(ctx)
 
-	server := api.NewRouter(metricHandler, cfg.HttpConfig, logger)
+	server := api.NewRouter(metricHandler, healthHandler, cfg.HttpConfig, logger)
 	manager.server = server
 	manager.logger = logger
 	return manager, nil
@@ -61,6 +72,12 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 func (lm *LifecycleManager) createMetricHandler(snapshotSvc *snapshot.Service, metricSvc *metrics.Service) *handlers.MetricsHandler {
 	metricHandler := handlers.NewMetricsHandler(metricSvc, snapshotSvc)
 	return metricHandler
+}
+
+// createHealthHandler Создает HTTP-обработчик для проверки состояния сервиса
+func (lm *LifecycleManager) createHealthHandler(log logger.Logger, healthSvc *health.Service) *handlers.HealthHandler {
+	healthHandler := handlers.NewHealthHandler(log, healthSvc)
+	return healthHandler
 }
 
 func (lm *LifecycleManager) Start() error {

@@ -11,6 +11,7 @@ import (
 type Config struct {
 	HttpConfig            HTTP `yaml:"http"`
 	SnapshotServiceConfig SnapshotService
+	Postgres              Postgres `yaml:"postgres"`
 }
 
 func Load(configPath string) (*Config, error) {

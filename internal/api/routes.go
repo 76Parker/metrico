@@ -11,8 +11,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(handler *handlers.MetricsHandler, httpCfg config.HTTP, log logger.Logger) *http.Server {
-	router := registerHttpRoutes(handler, log)
+func NewRouter(
+	metricsHandler *handlers.MetricsHandler,
+	healthHandler *handlers.HealthHandler,
+	httpCfg config.HTTP,
+	log logger.Logger,
+) *http.Server {
+	router := registerHttpRoutes(metricsHandler, healthHandler, log)
 	return newHttpServer(httpCfg, router)
 }
 
@@ -28,16 +33,29 @@ func newHttpServer(cfg config.HTTP, router *gin.Engine) *http.Server {
 	}
 }
 
-func registerHttpRoutes(handler *handlers.MetricsHandler, log logger.Logger) *gin.Engine {
+func registerHttpRoutes(
+	metricsHandler *handlers.MetricsHandler,
+	healthHandler *handlers.HealthHandler,
+	log logger.Logger,
+) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-	router.Use(middleware.WithLogging(log))
-	router.Use(middleware.Compress())
-	router.LoadHTMLGlob("templates/*")
-	router.POST("/update/:metricType/:metricName/:metricValue", handler.Update)
-	router.POST("/value", handler.GetFromJSON)
-	router.POST("/update", handler.UpdateFromJSON)
-	router.GET("/value/:metricType/:metricName", handler.GetByName)
-	router.GET("/", handler.GetAll)
+	registerMetricsRoutes(router, metricsHandler, log)
+	registerHealthRoutes(router, healthHandler)
 	return router
+}
+
+func registerMetricsRoutes(router *gin.Engine, handler *handlers.MetricsHandler, log logger.Logger) {
+	logMW := middleware.WithLogging(log)
+	compressMW := middleware.Compress()
+	router.LoadHTMLGlob("templates/*")
+	router.POST("/update/:metricType/:metricName/:metricValue", logMW, compressMW, handler.Update)
+	router.POST("/value", logMW, compressMW, handler.GetFromJSON)
+	router.POST("/update", logMW, compressMW, handler.UpdateFromJSON)
+	router.GET("/value/:metricType/:metricName", logMW, compressMW, handler.GetByName)
+	router.GET("/", logMW, compressMW, handler.GetAll)
+}
+
+func registerHealthRoutes(router *gin.Engine, handler *handlers.HealthHandler) {
+	router.GET("/ping", handler.CheckAvailability)
 }
