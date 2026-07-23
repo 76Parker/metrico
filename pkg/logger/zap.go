@@ -25,6 +25,12 @@ type ZapLogger struct {
 	logger *zap.SugaredLogger
 }
 
+func NewMockLogger() *ZapLogger {
+	return &ZapLogger{
+		logger: zap.NewNop().Sugar(),
+	}
+}
+
 func NewZapLogger(logLevel string) (*ZapLogger, error) {
 	logLvl, err := zapcore.ParseLevel(logLevel)
 	if err != nil {

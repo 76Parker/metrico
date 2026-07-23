@@ -15,6 +15,7 @@ import (
 	domainmetrics "github.com/76Parker/metrico/internal/domain/metrics"
 	"github.com/76Parker/metrico/internal/usecase/metrics"
 	"github.com/76Parker/metrico/internal/usecase/snapshot"
+	"github.com/76Parker/metrico/pkg/logger"
 	"github.com/gin-gonic/gin"
 	goccyjson "github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
@@ -211,7 +212,8 @@ func createTestRouter() *gin.Engine {
 	if err != nil {
 		log.Fatal("failed to create snapshot storage: %w", err)
 	}
-	snapshotService := snapshot.NewService(metricStorage, snapshotStorage, 0*time.Second)
+	logger := logger.NewMockLogger()
+	snapshotService := snapshot.NewService(metricStorage, snapshotStorage, 0*time.Second, logger)
 	ctx := context.Background()
 	snapshotService.Run(ctx)
 	metricHandler := NewMetricsHandler(metricService, snapshotService)

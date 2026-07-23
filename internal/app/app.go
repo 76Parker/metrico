@@ -28,12 +28,18 @@ type LifecycleManager struct {
 func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleManager, error) {
 	manager := &LifecycleManager{cfg: cfg}
 
+	lvl := "info"
+	logger, err := logger.NewZapLogger(lvl)
+	if err != nil {
+		return nil, err
+	}
+
 	snapshotStorage, err := filestorage.NewStorage(cfg.SnapshotServiceConfig.FileStoragePath)
 	if err != nil {
 		return nil, err
 	}
 	metricStorage := memstorage.NewMemStorage()
-	snapshotSvc := snapshot.NewService(metricStorage, snapshotStorage, cfg.SnapshotServiceConfig.StoreInterval)
+	snapshotSvc := snapshot.NewService(metricStorage, snapshotStorage, cfg.SnapshotServiceConfig.StoreInterval, logger)
 	metricSvc := metrics.NewService(metricStorage)
 	metricHandler := manager.createMetricHandler(snapshotSvc, metricSvc)
 
@@ -43,12 +49,6 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 		}
 	}
 	snapshotSvc.Run(ctx)
-
-	lvl := "info"
-	logger, err := logger.NewZapLogger(lvl)
-	if err != nil {
-		return nil, err
-	}
 
 	server := api.NewRouter(metricHandler, cfg.HttpConfig, logger)
 	manager.server = server

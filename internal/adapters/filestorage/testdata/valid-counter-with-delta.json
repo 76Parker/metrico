@@ -1,0 +1,7 @@
+[
+  {
+    "id": "test_counter",
+    "type": "counter",
+    "delta": 10
+  }
+]
