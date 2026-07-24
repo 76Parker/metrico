@@ -54,6 +54,11 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 		return nil, err
 	}
 	postgresStorage := postgres.NewRepository(db)
+	if err := postgresStorage.Ping(ctx); err != nil {
+		logger.Warn("Failed to ping PostgreSQL", "error", err)
+		useDB = false
+		applyMigration = false
+	}
 	memoryStorage := memstorage.NewMemStorage()
 	var metricSvc *metrics.Service
 	switch useDB {
