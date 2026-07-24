@@ -49,8 +49,10 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 	var applyMigration bool
 	db, err := pgx.Connect(ctx, cfg.Postgres.DSN)
 	if err != nil {
-		applyMigration = true
+		applyMigration = false
 		logger.Warn("Failed to connect PostgreSQL", "error", err)
+	} else {
+		applyMigration = true
 	}
 
 	repo := postgres.NewRepository(db)
