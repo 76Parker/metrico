@@ -3,13 +3,13 @@ package postgres
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type healthRepository struct {
-	conn *pgx.Conn
+type healthRepo struct {
+	pool *pgxpool.Pool
 }
 
-func (r *healthRepository) Ping(ctx context.Context) error {
-	return r.conn.Ping(ctx)
+func (r *healthRepo) Ping(ctx context.Context) error {
+	return r.pool.Ping(ctx)
 }
