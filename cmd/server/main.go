@@ -23,7 +23,7 @@ const (
 	defaultFileStoragePath = "metrics.json"
 	defaultStoreInterval   = 300
 	defaultRestore         = false
-	defaultDatabaseDSN     = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+	defaultDatabaseDSN     = "" // default value == db is not used
 )
 
 // Application configuration flags

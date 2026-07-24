@@ -18,7 +18,7 @@ import (
 	"github.com/76Parker/metrico/internal/usecase/metrics"
 	"github.com/76Parker/metrico/internal/usecase/snapshot"
 	"github.com/76Parker/metrico/pkg/logger"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type LifecycleManager struct {
@@ -31,23 +31,17 @@ type LifecycleManager struct {
 func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleManager, error) {
 	manager := &LifecycleManager{cfg: cfg}
 
+	var useDB bool
+	if cfg.Postgres.DSN != "" {
+		useDB = true
+	}
 	lvl := "info"
 	logger, err := logger.NewZapLogger(lvl)
 	if err != nil {
 		return nil, err
 	}
-
-	snapshotStorage, err := filestorage.NewStorage(cfg.SnapshotServiceConfig.FileStoragePath)
-	if err != nil {
-		return nil, err
-	}
-	metricStorage := memstorage.NewMemStorage()
-	snapshotSvc := snapshot.NewService(metricStorage, snapshotStorage, cfg.SnapshotServiceConfig.StoreInterval, logger)
-	metricSvc := metrics.NewService(metricStorage)
-	metricHandler := manager.createMetricHandler(snapshotSvc, metricSvc)
-
 	var applyMigration bool
-	db, err := pgx.Connect(ctx, cfg.Postgres.DSN)
+	db, err := pgxpool.New(ctx, cfg.Postgres.DSN)
 	if err != nil {
 		applyMigration = false
 		logger.Warn("Failed to connect PostgreSQL", "error", err)
@@ -55,12 +49,28 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 		applyMigration = true
 	}
 
-	repo := postgres.NewRepository(db)
-	healthSvc := health.NewService(repo)
+	snapshotStorage, err := filestorage.NewStorage(cfg.SnapshotServiceConfig.FileStoragePath)
+	if err != nil {
+		return nil, err
+	}
+	postgresStorage := postgres.NewRepository(db)
+	memoryStorage := memstorage.NewMemStorage()
+	var metricSvc *metrics.Service
+	switch useDB {
+	case true:
+		metricSvc = metrics.NewService(postgresStorage)
+	case false:
+		metricSvc = metrics.NewService(memoryStorage)
+	}
+
+	snapshotSvc := snapshot.NewService(memoryStorage, snapshotStorage, cfg.SnapshotServiceConfig.StoreInterval, logger)
+	metricHandler := manager.createMetricHandler(snapshotSvc, metricSvc)
+
+	healthSvc := health.NewService(postgresStorage)
 	healthHandler := manager.createHealthHandler(logger, healthSvc)
 
 	if applyMigration {
-		if err := repo.Migrate(ctx, "./migrations"); err != nil {
+		if err := postgresStorage.Migrate(ctx, "./migrations"); err != nil {
 			return nil, err
 		}
 	}
@@ -80,8 +90,8 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 // createMetricHandler Создает HTTP-обработчик для взаимодействия с метриками
 // Иницализируем все зависимости для обработчика с нижних слоев до верхнего
 func (lm *LifecycleManager) createMetricHandler(snapshotSvc *snapshot.Service, metricSvc *metrics.Service) *handlers.MetricsHandler {
-	metricHandler := handlers.NewMetricsHandler(metricSvc, snapshotSvc)
-	return metricHandler
+	h := handlers.NewMetricsHandler(metricSvc, snapshotSvc)
+	return h
 }
 
 // createHealthHandler Создает HTTP-обработчик для проверки состояния сервиса

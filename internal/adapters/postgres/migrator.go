@@ -29,7 +29,7 @@ func (r *Repository) Migrate(ctx context.Context, migrationDir string) error {
 		Path:   path,
 	}).String()
 
-	db := stdlib.OpenDB(*r.conn.Config())
+	db := stdlib.OpenDB(*r.pool.Config().ConnConfig)
 
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
 	if err != nil {

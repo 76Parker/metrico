@@ -1,0 +1,14 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "internal/adapters/postgres/queries"
+    schema:
+      - "migrations/000001_create_metric_schema.up.sql"
+      - "migrations/000002_create_metrics_table.up.sql"
+    gen:
+      go:
+        package: "pgen"
+        sql_package: "pgx/v5"
+        out: "internal/adapters/postgres/pgen"
+        emit_json_tags: true
+        emit_interface: true

@@ -1,15 +1,20 @@
 package postgres
 
-import "github.com/jackc/pgx/v5"
+import (
+	"github.com/76Parker/metrico/internal/adapters/postgres/pgen"
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
 type Repository struct {
-	conn *pgx.Conn
-	*healthRepository
+	db *pgen.Queries
+	*healthRepo
+	*metricsRepo
 }
 
-func NewRepository(conn *pgx.Conn) *Repository {
+func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{
-		conn:             conn,
-		healthRepository: &healthRepository{conn: conn},
+		db:          pgen.New(pool),
+		healthRepo:  &healthRepo{pool: pool},
+		metricsRepo: &metricsRepo{q: pgen.New(pool)},
 	}
 }
