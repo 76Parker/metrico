@@ -48,6 +48,7 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 
 	db, err := pgx.Connect(ctx, cfg.Postgres.DSN)
 	if err != nil {
+		logger.Warn("Failed to connect PostgreSQL", "error", err)
 		return nil, err
 	}
 	healthRepo := postgres.NewRepository(db)
