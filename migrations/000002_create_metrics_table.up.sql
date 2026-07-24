@@ -5,6 +5,6 @@ CREATE TABLE IF NOT EXISTS metric.metrics (
     value DOUBLE PRECISION,
     delta BIGINT,
     hash text,
-    created_at TIMESTAMPz NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPz NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
