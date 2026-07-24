@@ -12,6 +12,10 @@ type HTTP struct {
 	IdleTimeout       time.Duration `yaml:"idle_timeout"`
 }
 
+type Postgres struct {
+	DSN string
+}
+
 type SnapshotService struct {
 	StoreInterval   time.Duration
 	FileStoragePath string

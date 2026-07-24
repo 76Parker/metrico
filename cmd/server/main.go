@@ -23,6 +23,7 @@ const (
 	defaultFileStoragePath = "metrics.json"
 	defaultStoreInterval   = 300
 	defaultRestore         = false
+	defaultDatabaseDSN     = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 )
 
 // Application configuration flags
@@ -31,6 +32,7 @@ var (
 	fileStoragePath string // -f (or FILE_STORAGE_PATH env var)
 	storeInterval   int    // -i (or STORE_INTERVAL env var)
 	restore         bool   // -r (or RESTORE env var)
+	databaseDSN     string // -d (or DATABASE_DSN env var)
 )
 
 type envConfig struct {
@@ -38,6 +40,7 @@ type envConfig struct {
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	StoreInterval   int    `env:"STORE_INTERVAL"`
 	Restore         bool   `env:"RESTORE"`
+	DatabaseDSN     string `env:"DATABASE_DSN"`
 }
 
 func (c *envConfig) applyOverrides() {
@@ -52,6 +55,9 @@ func (c *envConfig) applyOverrides() {
 	}
 	if _, ok := os.LookupEnv("RESTORE"); ok {
 		restore = c.Restore
+	}
+	if _, ok := os.LookupEnv("DATABASE_DSN"); ok {
+		databaseDSN = c.DatabaseDSN
 	}
 }
 
@@ -78,6 +84,7 @@ func main() {
 	flag.StringVar(&fileStoragePath, "f", defaultFileStoragePath, "file storage path") // -f
 	flag.IntVar(&storeInterval, "i", defaultStoreInterval, "store interval")           // -i
 	flag.BoolVar(&restore, "r", defaultRestore, "restore from file")                   // -r
+	flag.StringVar(&databaseDSN, "d", defaultDatabaseDSN, "database DSN")              // -d
 
 	flag.Parse()
 	configFromEnv, err := env.ParseAs[envConfig]()
@@ -96,6 +103,7 @@ func main() {
 		FileStoragePath: fileStoragePath,
 		Restore:         restore,
 	}
+	cfg.Postgres.DSN = databaseDSN
 	appManager, err := app.NewLifecycleManager(ctx, *cfg)
 	if err != nil {
 		log.Fatal("error creating app manager:", err)
