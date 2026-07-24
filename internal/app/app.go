@@ -46,14 +46,22 @@ func NewLifecycleManager(ctx context.Context, cfg config.Config) (*LifecycleMana
 	metricSvc := metrics.NewService(metricStorage)
 	metricHandler := manager.createMetricHandler(snapshotSvc, metricSvc)
 
+	var applyMigration bool
 	db, err := pgx.Connect(ctx, cfg.Postgres.DSN)
 	if err != nil {
+		applyMigration = true
 		logger.Warn("Failed to connect PostgreSQL", "error", err)
 	}
-	healthRepo := postgres.NewRepository(db)
-	healthSvc := health.NewService(healthRepo)
+
+	repo := postgres.NewRepository(db)
+	healthSvc := health.NewService(repo)
 	healthHandler := manager.createHealthHandler(logger, healthSvc)
 
+	if applyMigration {
+		if err := repo.Migrate(ctx, "./migrations"); err != nil {
+			return nil, err
+		}
+	}
 	if cfg.SnapshotServiceConfig.Restore {
 		if err := snapshotSvc.Restore(ctx); err != nil {
 			return nil, err
