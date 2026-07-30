@@ -2,10 +2,12 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/76Parker/metrico/internal/adapters/postgres/pgen"
+	metricapp "github.com/76Parker/metrico/internal/applications/metrics"
 	"github.com/76Parker/metrico/internal/domain/metrics"
-	"github.com/jackc/pgx/v5/pgtype"
+	goccyjson "github.com/goccy/go-json"
 )
 
 type metricsRepo struct {
@@ -16,29 +18,32 @@ func NewMetricsRepository(q *pgen.Queries) *metricsRepo {
 	return &metricsRepo{q: q}
 }
 
-func (r *metricsRepo) UpdateOrCreate(ctx context.Context, metricName string, metric metrics.Metrics) error {
-	var delta pgtype.Int8
-	if metric.Delta != nil {
-		delta = pgtype.Int8{
-			Int64: *metric.Delta,
-			Valid: true,
+func (t *metricsRepo) Apply(ctx context.Context, changes []metricapp.Change) error {
+	batch := make(pgen.BatchUpsertParam, 0, len(changes))
+	for _, change := range changes {
+		batchElem := pgen.BatchUpsertMetric{
+			Name: change.Name(),
+			Type: string(change.MetricType()),
 		}
-	}
-	var value pgtype.Float8
-	if metric.Value != nil {
-		value = pgtype.Float8{
-			Float64: *metric.Value,
-			Valid:   true,
+		switch change.MetricType() {
+		case metrics.MetricTypeGauge:
+			value := change.Value()
+			batchElem.Value = &value
+		case metrics.MetricTypeCounter:
+			delta := change.Delta()
+			batchElem.Delta = &delta
 		}
+		batch = append(batch, batchElem)
 	}
-	sqlInput := pgen.UpsertParams{
-		Name:  metricName,
-		Type:  string(metric.Type),
-		Value: value,
-		Delta: delta,
+	batchByte, err := goccyjson.Marshal(batch)
+	if err != nil {
+		return fmt.Errorf("unmarshal batch: %w", err)
 	}
-	err := r.q.Upsert(ctx, sqlInput)
-	return err
+	err = t.q.BatchUpsert(ctx, batchByte)
+	if err != nil {
+		return fmt.Errorf("batch upsert: %w", err)
+	}
+	return nil
 }
 
 func (r *metricsRepo) Get(ctx context.Context, metricName string) (metrics.Metrics, error) {

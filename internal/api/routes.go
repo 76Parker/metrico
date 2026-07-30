@@ -52,6 +52,7 @@ func registerMetricsRoutes(router *gin.Engine, handler *handlers.MetricsHandler,
 	router.POST("/update/:metricType/:metricName/:metricValue", logMW, compressMW, handler.Update)
 	router.POST("/value", logMW, compressMW, handler.GetFromJSON)
 	router.POST("/update", logMW, compressMW, handler.UpdateFromJSON)
+	router.POST("/updates", logMW, compressMW, handler.BatchUpdateFromJSON)
 	router.GET("/value/:metricType/:metricName", logMW, compressMW, handler.GetByName)
 	router.GET("/", logMW, compressMW, handler.GetAll)
 }

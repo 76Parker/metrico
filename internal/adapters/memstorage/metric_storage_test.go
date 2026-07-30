@@ -1,219 +1,258 @@
 package memstorage
 
 import (
+	"context"
 	"sync"
 	"testing"
 
+	metricsapp "github.com/76Parker/metrico/internal/applications/metrics"
 	"github.com/76Parker/metrico/internal/domain/metrics"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-/*
- * Тесты с постфиксом _Valid проверяют корректно ли код обрабатывает валидные входные данные
- * Тесты с постфиксом _Invalid проверяют корректно ли код обрабатывает невалидные входные данные, метод должен возвращать ошибку
- */
+func TestMemStorage_Apply(t *testing.T) {
+	t.Run("valid/empty_batch", func(t *testing.T) {
+		storage := newTestMemStorage(t)
 
-// TestUpdateGauge_Valid: валидные входные данные для обновления Gauge
-func TestUpdateGauge_Valid(t *testing.T) {
+		require.NoError(t, storage.Apply(t.Context(), nil))
 
-	testCases := []struct {
-		name       string
-		metricName string
-		metric     metrics.Metrics
-	}{
-		// NilDelta: значение `Delta` для Gauge может быть nil
-		{
-			name:       "NilDelta",
-			metricName: "test_gauge_1",
-			metric: metrics.Metrics{
-				ID:    "test_gauge",
-				Type:  metrics.Gauge,
-				Delta: nil,
-				Value: new(42.0),
-				Hash:  "",
-			},
-		},
-		// NonNilDelta: значение `Delta` для Gauge может быть не nil
-		{
-			name:       "NonNilDelta",
-			metricName: "test_gauge_2",
-			metric: metrics.Metrics{
-				ID:    "test_gauge",
-				Type:  metrics.Gauge,
-				Delta: new(int64(123)),
-				Value: new(0.00),
-				Hash:  "123",
-			},
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
-			assert.NoError(t, err)
+		items, err := storage.GetAll(t.Context())
+		require.NoError(t, err)
+		require.Empty(t, items)
+	})
+
+	t.Run("valid/create_and_update_gauge", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 42.5),
+		}))
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 0),
+		}))
+
+		metric, err := storage.Get(t.Context(), "temperature")
+		require.NoError(t, err)
+		require.Equal(t, gaugeMetric("temperature", 0), metric)
+	})
+
+	t.Run("valid/create_and_increment_counter", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewAddCounterChange("requests", 0),
+			metricsapp.NewAddCounterChange("requests", 5),
+			metricsapp.NewAddCounterChange("requests", -2),
+		}))
+
+		metric, err := storage.Get(t.Context(), "requests")
+		require.NoError(t, err)
+		require.Equal(t, counterMetric("requests", 3), metric)
+	})
+
+	t.Run("valid/mixed_batch", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 18.5),
+			metricsapp.NewAddCounterChange("requests", 3),
+			metricsapp.NewAddCounterChange("requests", 2),
+		}))
+
+		items, err := storage.GetAll(t.Context())
+		require.NoError(t, err)
+		require.ElementsMatch(t, []metrics.Metrics{
+			gaugeMetric("temperature", 18.5),
+			counterMetric("requests", 5),
+		}, items)
+	})
+
+	t.Run("valid/concurrent_counter_updates", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		const updates = 100
+
+		var wg sync.WaitGroup
+		errs := make(chan error, updates)
+		for range updates {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				errs <- storage.Apply(context.Background(), []metricsapp.Change{
+					metricsapp.NewAddCounterChange("requests", 1),
+				})
+			}()
+		}
+		wg.Wait()
+		close(errs)
+
+		for err := range errs {
+			require.NoError(t, err)
+		}
+
+		metric, err := storage.Get(t.Context(), "requests")
+		require.NoError(t, err)
+		require.Equal(t, counterMetric("requests", updates), metric)
+	})
+
+	t.Run("invalid/change_kind", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		err := storage.Apply(t.Context(), []metricsapp.Change{{}})
+
+		require.ErrorIs(t, err, metrics.ErrInvalidMetricType)
+	})
+
+	t.Run("invalid/empty_metric_name", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		err := storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("", 1),
 		})
-	}
 
+		require.ErrorIs(t, err, metrics.ErrMetricNameIsEmpty)
+	})
+
+	t.Run("invalid/existing_metric_type_conflict", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 42.5),
+		}))
+
+		err := storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewAddCounterChange("temperature", 1),
+		})
+
+		require.ErrorIs(t, err, metrics.ErrMetricTypeConflict)
+		metric, getErr := storage.Get(t.Context(), "temperature")
+		require.NoError(t, getErr)
+		require.Equal(t, gaugeMetric("temperature", 42.5), metric)
+	})
+
+	t.Run("invalid/intra_batch_metric_type_conflict_is_atomic", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		err := storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 42.5),
+			metricsapp.NewAddCounterChange("temperature", 1),
+		})
+
+		require.ErrorIs(t, err, metrics.ErrMetricTypeConflict)
+		_, getErr := storage.Get(t.Context(), "temperature")
+		require.ErrorIs(t, getErr, metrics.ErrMetricNotFound)
+	})
 }
 
-// TestUpdateGauge_Invalid: невалидные входные данные для обновления метрики типа Gauge
-func TestUpdateGauge_Invalid(t *testing.T) {
-	testCases := []struct {
-		name        string
-		requiredErr error
-		metricName  string
-		metric      metrics.Metrics
-	}{
-		// NilValue: значение `Value` для Gauge не может быть nil
-		{
-			name:        "NilValue",
-			metricName:  "test_name",
-			requiredErr: metrics.ErrGaugeValueIsNil,
-			metric: metrics.Metrics{
-				ID:    "test_id",
-				Type:  metrics.Gauge,
-				Delta: new(int64(1)),
-				Value: nil,
-				Hash:  "",
-			},
-		},
-		// InvalidMetricType: невалидный тип метрики
-		{
-			name:        "InvalidMetricType",
-			requiredErr: metrics.ErrInvalidMetricType,
-			metricName:  "test_gauge",
-			metric: metrics.Metrics{
-				Type:  metrics.MetricType("invalid_type"),
-				Delta: nil,
-				Value: new(0.0),
-				Hash:  "",
-			},
-		},
-		// EmptyMetricName: имя метрики не может быть пустым
-		{
-			name:        "EmptyMetricName",
-			requiredErr: metrics.ErrMetricNameIsEmpty,
-			metricName:  "",
-			metric: metrics.Metrics{
-				ID:    "123",
-				Type:  metrics.Gauge,
-				Delta: nil,
-				Value: new(1.1),
-				Hash:  "123",
-			},
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
-			assert.ErrorIs(t, err, tc.requiredErr)
-		})
-	}
+func TestMemStorage_Get(t *testing.T) {
+	t.Run("valid/existing_metric", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 42.5),
+		}))
+
+		metric, err := storage.Get(t.Context(), "temperature")
+
+		require.NoError(t, err)
+		require.Equal(t, gaugeMetric("temperature", 42.5), metric)
+	})
+
+	t.Run("invalid/empty_metric_name", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		_, err := storage.Get(t.Context(), "")
+
+		require.ErrorIs(t, err, metrics.ErrMetricNameIsEmpty)
+	})
+
+	t.Run("invalid/metric_not_found", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		_, err := storage.Get(t.Context(), "missing")
+
+		require.ErrorIs(t, err, metrics.ErrMetricNotFound)
+	})
 }
 
-// TestUpdateCounter_Valid: валидные входные данные для обновления Counter
-func TestUpdateCounter_Valid(t *testing.T) {
-	testCases := []struct {
-		name       string
-		metricName string
-		metric     metrics.Metrics
-	}{
-		// NilValue: значение `Value` для Counter может быть nil
-		{
-			name:       "NilValue",
-			metricName: "test_counter",
-			metric: metrics.Metrics{
-				ID:    "test_id",
-				Type:  metrics.Counter,
-				Delta: new(int64(1)),
-				Value: nil,
-				Hash:  "",
-			},
-		},
-		// NotNilValue: значение `Value` для Counter может быть не nil
-		{
-			name:       "NotNilValue",
-			metricName: "test_counter",
-			metric: metrics.Metrics{
-				ID:    "test_id",
-				Type:  metrics.Counter,
-				Delta: new(int64(5)),
-				Value: new(1.0),
-				Hash:  "123",
-			},
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
-			assert.NoError(t, err)
-		})
-	}
+func TestMemStorage_Load(t *testing.T) {
+	t.Run("valid/replaces_existing_metrics", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("stale", 1),
+		}))
+
+		require.NoError(t, storage.Load(t.Context(), []metrics.Metrics{
+			gaugeMetric("temperature", 18.5),
+			counterMetric("requests", 3),
+		}))
+
+		items, err := storage.GetAll(t.Context())
+		require.NoError(t, err)
+		require.ElementsMatch(t, []metrics.Metrics{
+			gaugeMetric("temperature", 18.5),
+			counterMetric("requests", 3),
+		}, items)
+	})
+
+	t.Run("valid/empty_snapshot_clears_storage", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 18.5),
+		}))
+
+		require.NoError(t, storage.Load(t.Context(), nil))
+
+		items, err := storage.GetAll(t.Context())
+		require.NoError(t, err)
+		require.NotNil(t, items)
+		require.Empty(t, items)
+	})
 }
 
-// TestUpdateCounter_Invalid: невалидные входные данные для обновления метрики типа Counter
-func TestUpdateCounter_Invalid(t *testing.T) {
-	testCases := []struct {
-		name        string
-		requiredErr error
-		metricName  string
-		metric      metrics.Metrics
-	}{
-		// NilDelta: delta для Counter не может быть nil
-		{
-			name:        "NilDelta",
-			requiredErr: metrics.ErrCounterValueIsNil,
-			metricName:  "test_gauge",
-			metric: metrics.Metrics{
-				ID:    "test_id",
-				Type:  metrics.Counter,
-				Delta: nil,
-				Value: new(1.0),
-				Hash:  "123",
-			},
-		},
-		// EmptyMetricName: имя метрики не может быть пустым
-		{
-			name:        "EmptyMetricName",
-			requiredErr: metrics.ErrMetricNameIsEmpty,
-			metricName:  "",
-			metric: metrics.Metrics{
-				ID:    "test_id",
-				Type:  metrics.Counter,
-				Delta: new(int64(1)),
-				Value: new(1.0),
-				Hash:  "123",
-			},
-		},
-		// InvalidMetricType: тип метрики не может быть невалидным
-		{
-			name:        "InvalidMetricType",
-			requiredErr: metrics.ErrInvalidMetricType,
-			metricName:  "test_name",
-			metric: metrics.Metrics{
-				ID:    "test_id",
-				Type:  metrics.MetricType("invalid metric type"),
-				Delta: new(int64(1)),
-				Value: new(1.0),
-				Hash:  "123",
-			},
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			storage := newTestMemStorage(t)
-			err := storage.UpdateOrCreate(t.Context(), tc.metricName, tc.metric)
-			assert.ErrorIs(t, err, tc.requiredErr)
-		})
-	}
+func TestMemStorage_GetAll(t *testing.T) {
+	t.Run("valid/empty_storage_returns_non_nil_empty_slice", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+
+		items, err := storage.GetAll(t.Context())
+
+		require.NoError(t, err)
+		require.NotNil(t, items)
+		require.Empty(t, items)
+	})
+
+	t.Run("valid/returns_all_metrics", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("temperature", 18.5),
+			metricsapp.NewAddCounterChange("requests", 3),
+		}))
+
+		items, err := storage.GetAll(t.Context())
+
+		require.NoError(t, err)
+		require.ElementsMatch(t, []metrics.Metrics{
+			gaugeMetric("temperature", 18.5),
+			counterMetric("requests", 3),
+		}, items)
+	})
 }
 
 func newTestMemStorage(t *testing.T) *MemStorage {
 	t.Helper()
-	return &MemStorage{
-		mu:      &sync.Mutex{},
-		metrics: make(map[string]metrics.Metrics),
+
+	return NewMemStorage()
+}
+
+func gaugeMetric(name string, value float64) metrics.Metrics {
+	return metrics.Metrics{
+		ID:    name,
+		Type:  metrics.MetricTypeGauge,
+		Value: &value,
+	}
+}
+
+func counterMetric(name string, delta int64) metrics.Metrics {
+	return metrics.Metrics{
+		ID:    name,
+		Type:  metrics.MetricTypeCounter,
+		Delta: &delta,
 	}
 }

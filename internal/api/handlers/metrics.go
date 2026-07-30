@@ -11,33 +11,29 @@ import (
 	"unicode/utf8"
 
 	"github.com/76Parker/metrico/internal/api/apierrs"
+	metricsapp "github.com/76Parker/metrico/internal/applications/metrics"
 	"github.com/76Parker/metrico/internal/domain/metrics"
-	metricsusecase "github.com/76Parker/metrico/internal/usecase/metrics"
 	"github.com/gin-gonic/gin"
 	goccyjson "github.com/goccy/go-json"
 )
 
-type metricService interface {
-	UpdateOrCreateMetric(ctx context.Context, cmd metricsusecase.UpdateCommand) error
-	GetMetricByName(ctx context.Context, cmd metricsusecase.GetCommand) (metrics.Metrics, error)
-	GetAllMetrics(ctx context.Context) ([]metrics.Metrics, error)
-}
+const batchReservationSize = 50
 
-type snapshotService interface {
-	UpdateSnapshot(ctx context.Context) error
+type metricsApplication interface {
+	Update(ctx context.Context, cmd metricsapp.UpdateCommand) error
+	BatchUpdate(ctx context.Context, cmd metricsapp.BatchUpdateCommand) error
+	GetByName(ctx context.Context, name string) (metrics.Metrics, error)
+	GetAll(ctx context.Context) ([]metrics.Metrics, error)
 }
-
 type MetricsHandler struct {
-	metricSvc       metricService
-	snapshotSvc     snapshotService
+	metricSvc       metricsApplication
 	maxPathParamLen int
 }
 
-func NewMetricsHandler(metricSvc metricService, snapshotSvc snapshotService) *MetricsHandler {
+func NewMetricsHandler(metricSvc metricsApplication) *MetricsHandler {
 	maxPathParamLen := 64
 	return &MetricsHandler{
 		metricSvc:       metricSvc,
-		snapshotSvc:     snapshotSvc,
 		maxPathParamLen: maxPathParamLen,
 	}
 }
@@ -60,7 +56,7 @@ func (h *MetricsHandler) Update(c *gin.Context) {
 	var delta *int64
 	var value *float64
 	switch metricKind {
-	case metrics.Gauge:
+	case metrics.MetricTypeGauge:
 		parsedValue, err := strconv.ParseFloat(metricValue, 64)
 		if err != nil {
 			c.Error(apierrs.NewError(metrics.ErrInvalidValueForGauge.Error(), http.StatusBadRequest))
@@ -68,7 +64,7 @@ func (h *MetricsHandler) Update(c *gin.Context) {
 			return
 		}
 		value = &parsedValue
-	case metrics.Counter:
+	case metrics.MetricTypeCounter:
 		parsedDelta, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
 			c.Error(apierrs.NewError(metrics.ErrInvalidValueForCounter.Error(), http.StatusBadRequest))
@@ -81,19 +77,13 @@ func (h *MetricsHandler) Update(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	cmd := metricsusecase.UpdateCommand{
+	cmd := metricsapp.UpdateCommand{
 		Name:       metricName,
 		MetricType: metricKind,
 		Delta:      delta,
 		Value:      value,
 	}
-	if err := h.metricSvc.UpdateOrCreateMetric(c.Request.Context(), cmd); err != nil {
-		apiErr := apierrs.NewErrorFromService(err)
-		c.Error(apiErr)
-		c.Status(apiErr.Status)
-		return
-	}
-	if err := h.snapshotSvc.UpdateSnapshot(c.Request.Context()); err != nil {
+	if err := h.metricSvc.Update(c.Request.Context(), cmd); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
 		c.Status(apiErr.Status)
@@ -132,22 +122,19 @@ func (h *MetricsHandler) UpdateFromJSON(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	cmd := metricsusecase.UpdateCommand{
+	cmd := metricsapp.UpdateCommand{
 		Name:       metric.ID,
 		MetricType: metric.Type,
 		Delta:      metric.Delta,
 		Value:      metric.Value,
 	}
-	if err := h.metricSvc.UpdateOrCreateMetric(c.Request.Context(), cmd); err != nil {
+	if err := h.metricSvc.Update(c.Request.Context(), cmd); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
 		c.Status(apiErr.Status)
 		return
 	}
-	updatedMetric, err := h.metricSvc.GetMetricByName(c.Request.Context(), metricsusecase.GetCommand{
-		Name:       metric.ID,
-		MetricType: metric.Type,
-	})
+	updatedMetric, err := h.metricSvc.GetByName(c.Request.Context(), metric.ID)
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
@@ -161,13 +148,37 @@ func (h *MetricsHandler) UpdateFromJSON(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-	if err := h.snapshotSvc.UpdateSnapshot(c.Request.Context()); err != nil {
+	c.Data(http.StatusOK, "application/json", response)
+}
+
+func (h *MetricsHandler) BatchUpdateFromJSON(c *gin.Context) {
+	c.Header("Content-Type", "application/json")
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+	decoder := goccyjson.NewDecoder(c.Request.Body)
+	decoder.DisallowUnknownFields()
+
+	metricsBatch := make([]metrics.Metrics, 0, batchReservationSize)
+	if err := decoder.Decode(&metricsBatch); err != nil {
+		c.Error(apierrs.NewError("invalid input JSON", http.StatusBadRequest))
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	batchCommand := make(metricsapp.BatchUpdateCommand, 0, len(metricsBatch))
+	for _, metric := range metricsBatch {
+		batchCommand = append(batchCommand, metricsapp.UpdateCommand{
+			Name:       metric.ID,
+			MetricType: metrics.MetricType(strings.TrimSpace(string(metric.Type))),
+			Delta:      metric.Delta,
+			Value:      metric.Value,
+		})
+	}
+	if err := h.metricSvc.BatchUpdate(c.Request.Context(), batchCommand); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
 		c.Status(apiErr.Status)
 		return
 	}
-	c.Data(http.StatusOK, "application/json", response)
+	c.Status(http.StatusOK)
 }
 
 func (h *MetricsHandler) GetFromJSON(c *gin.Context) {
@@ -189,16 +200,13 @@ func (h *MetricsHandler) GetFromJSON(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	if request.Type != metrics.Gauge && request.Type != metrics.Counter {
+	if request.Type != metrics.MetricTypeCounter && request.Type != metrics.MetricTypeGauge {
 		c.Error(apierrs.NewError(metrics.ErrInvalidMetricType.Error(), http.StatusBadRequest))
 		c.Status(http.StatusBadRequest)
 		return
 	}
 
-	metric, err := h.metricSvc.GetMetricByName(c.Request.Context(), metricsusecase.GetCommand{
-		Name:       request.ID,
-		MetricType: request.Type,
-	})
+	metric, err := h.metricSvc.GetByName(c.Request.Context(), request.ID)
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
@@ -228,11 +236,8 @@ func (h *MetricsHandler) GetByName(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	cmd := metricsusecase.GetCommand{
-		Name:       metricName,
-		MetricType: metrics.MetricType(metricType),
-	}
-	metric, err := h.metricSvc.GetMetricByName(c.Request.Context(), cmd)
+
+	metric, err := h.metricSvc.GetByName(c.Request.Context(), metricName)
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
 		c.Error(apiErr)
@@ -256,7 +261,7 @@ type metricResponse struct {
 }
 
 func (h *MetricsHandler) GetAll(c *gin.Context) {
-	metricsSnapshot, err := h.metricSvc.GetAllMetrics(c.Request.Context())
+	metricsSnapshot, err := h.metricSvc.GetAll(c.Request.Context())
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
@@ -265,12 +270,12 @@ func (h *MetricsHandler) GetAll(c *gin.Context) {
 	resp := make([]metricResponse, 0, len(metricsSnapshot))
 	for _, metric := range metricsSnapshot {
 		switch metric.Type {
-		case metrics.Gauge:
+		case metrics.MetricTypeGauge:
 			resp = append(resp, metricResponse{
 				Name:  metric.ID,
 				Value: *metric.Value,
 			})
-		case metrics.Counter:
+		case metrics.MetricTypeCounter:
 			resp = append(resp, metricResponse{
 				Name:  metric.ID,
 				Value: *metric.Delta,

@@ -1,25 +1,18 @@
 package handlers
 
 import (
-	"context"
-	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/76Parker/metrico/internal/adapters/filestorage"
-	"github.com/76Parker/metrico/internal/adapters/memstorage"
+	metricsapp "github.com/76Parker/metrico/internal/applications/metrics"
 	domainmetrics "github.com/76Parker/metrico/internal/domain/metrics"
-	"github.com/76Parker/metrico/internal/usecase/metrics"
-	"github.com/76Parker/metrico/internal/usecase/snapshot"
-	"github.com/76Parker/metrico/pkg/logger"
 	"github.com/gin-gonic/gin"
 	goccyjson "github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 /*
@@ -28,30 +21,49 @@ import (
  */
 
 func TestUpdateMetric_Valid(t *testing.T) {
-	router := createTestRouter()
 	testCases := []struct {
 		name         string
 		path         string
 		expectedCode int
+		command      metricsapp.UpdateCommand
 	}{
 		{
 			name:         "ValidUpdate",
 			path:         "/update/counter/Test/1",
 			expectedCode: http.StatusOK,
+			command: metricsapp.UpdateCommand{
+				Name:       "Test",
+				MetricType: domainmetrics.MetricTypeCounter,
+				Delta:      int64Pointer(1),
+			},
 		},
 		{
 			name:         "ValidUpdate_2",
 			path:         "/update/counter/tt/500",
 			expectedCode: http.StatusOK,
+			command: metricsapp.UpdateCommand{
+				Name:       "tt",
+				MetricType: domainmetrics.MetricTypeCounter,
+				Delta:      int64Pointer(500),
+			},
 		},
 		{
 			name:         "ValidGaugeUpdate",
 			path:         "/update/gauge/temperature/23.5",
 			expectedCode: http.StatusOK,
+			command: metricsapp.UpdateCommand{
+				Name:       "temperature",
+				MetricType: domainmetrics.MetricTypeGauge,
+				Value:      float64Pointer(23.5),
+			},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			metricService := newMockMetricsApplication(t)
+			metricService.EXPECT().Update(gomock.Any(), tc.command).Return(nil)
+			router := createTestRouter(metricService)
+
 			req := httptest.NewRequest("POST", tc.path, nil)
 			rec := httptest.NewRecorder()
 
@@ -64,7 +76,6 @@ func TestUpdateMetric_Valid(t *testing.T) {
 }
 
 func TestUpdateMetric_Invalid(t *testing.T) {
-	router := createTestRouter()
 	testCases := []struct {
 		name         string
 		path         string
@@ -93,6 +104,9 @@ func TestUpdateMetric_Invalid(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			metricService := newMockMetricsApplication(t)
+			router := createTestRouter(metricService)
+
 			req := httptest.NewRequest("POST", tc.path, nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -104,26 +118,28 @@ func TestUpdateMetric_Invalid(t *testing.T) {
 }
 
 func TestGetMetricByNameJSON(t *testing.T) {
-	router := createTestRouter()
-
-	seedRequest := httptest.NewRequest(http.MethodPost, "/update/gauge/LastGC/1744184459", nil)
-	seedResponse := httptest.NewRecorder()
-	router.ServeHTTP(seedResponse, seedRequest)
-	require.Equal(t, http.StatusOK, seedResponse.Code)
-
 	tests := []struct {
 		name         string
 		body         string
 		wantStatus   int
 		wantResponse *domainmetrics.Metrics
+		metricName   string
+		metric       domainmetrics.Metrics
+		serviceErr   error
 	}{
 		{
 			name:       "returns gauge metric",
 			body:       `{"id":"LastGC","type":"gauge"}`,
 			wantStatus: http.StatusOK,
+			metricName: "LastGC",
+			metric: domainmetrics.Metrics{
+				ID:    "LastGC",
+				Type:  domainmetrics.MetricTypeGauge,
+				Value: float64Pointer(1744184459),
+			},
 			wantResponse: &domainmetrics.Metrics{
 				ID:    "LastGC",
-				Type:  domainmetrics.Gauge,
+				Type:  domainmetrics.MetricTypeGauge,
 				Value: float64Pointer(1744184459),
 			},
 		},
@@ -146,11 +162,19 @@ func TestGetMetricByNameJSON(t *testing.T) {
 			name:       "returns not found for missing metric",
 			body:       `{"id":"missing","type":"gauge"}`,
 			wantStatus: http.StatusNotFound,
+			metricName: "missing",
+			serviceErr: domainmetrics.ErrMetricNotFound,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			metricService := newMockMetricsApplication(t)
+			if tt.metricName != "" {
+				metricService.EXPECT().GetByName(gomock.Any(), tt.metricName).Return(tt.metric, tt.serviceErr)
+			}
+			router := createTestRouter(metricService)
+
 			request := httptest.NewRequest(http.MethodPost, "/value", strings.NewReader(tt.body))
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
@@ -171,7 +195,19 @@ func TestGetMetricByNameJSON(t *testing.T) {
 }
 
 func TestUpdateMetricJSONSetsJSONContentType(t *testing.T) {
-	router := createTestRouter()
+	metricService := newMockMetricsApplication(t)
+	updatedMetric := domainmetrics.Metrics{
+		ID:    "RandomValue",
+		Type:  domainmetrics.MetricTypeGauge,
+		Value: float64Pointer(1.5),
+	}
+	metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+		Name:       "RandomValue",
+		MetricType: domainmetrics.MetricTypeGauge,
+		Value:      float64Pointer(1.5),
+	}).Return(nil)
+	metricService.EXPECT().GetByName(gomock.Any(), "RandomValue").Return(updatedMetric, nil)
+	router := createTestRouter(metricService)
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/update",
@@ -188,7 +224,7 @@ func TestUpdateMetricJSONSetsJSONContentType(t *testing.T) {
 	require.NoError(t, goccyjson.Unmarshal(response.Body.Bytes(), &got))
 	require.Equal(t, domainmetrics.Metrics{
 		ID:    "RandomValue",
-		Type:  domainmetrics.Gauge,
+		Type:  domainmetrics.MetricTypeGauge,
 		Value: float64Pointer(1.5),
 	}, got)
 }
@@ -197,26 +233,20 @@ func float64Pointer(value float64) *float64 {
 	return &value
 }
 
-func createTestRouter() *gin.Engine {
+func int64Pointer(value int64) *int64 {
+	return &value
+}
+
+func newMockMetricsApplication(t *testing.T) *MockMetricsApplication {
+	t.Helper()
+
+	return NewMockMetricsApplication(gomock.NewController(t))
+}
+
+func createTestRouter(metricService metricsApplication) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
-	testStoragePath, err := os.CreateTemp("", "test-storage-path-*")
-	if err != nil {
-		log.Fatal("failed to create test storage: %w", err)
-	}
-	defer os.Remove(testStoragePath.Name())
-
-	metricStorage := memstorage.NewMemStorage()
-	metricService := metrics.NewService(metricStorage)
-	snapshotStorage, err := filestorage.NewStorage(testStoragePath.Name())
-	if err != nil {
-		log.Fatal("failed to create snapshot storage: %w", err)
-	}
-	logger := logger.NewMockLogger()
-	snapshotService := snapshot.NewService(metricStorage, snapshotStorage, 0*time.Second, logger)
-	ctx := context.Background()
-	snapshotService.Run(ctx)
-	metricHandler := NewMetricsHandler(metricService, snapshotService)
+	metricHandler := NewMetricsHandler(metricService)
 
 	router := gin.New()
 	router.POST("/update/:metricType/:metricName/:metricValue", metricHandler.Update)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/76Parker/metrico/internal/app"
 	"github.com/76Parker/metrico/internal/config"
+	"github.com/76Parker/metrico/pkg/logger"
 	"github.com/caarlos0/env/v11"
 )
 
@@ -104,32 +105,13 @@ func main() {
 		Restore:         restore,
 	}
 	cfg.Postgres.DSN = databaseDSN
-	appManager, err := app.NewLifecycleManager(ctx, *cfg)
+	applicationLog, err := logger.NewZapLogger("info")
 	if err != nil {
-		log.Fatal("error creating app manager:", err)
+		log.Fatal("error creating logger:", err)
 	}
 
-	errCh := make(chan error, 1)
-
-	go func() {
-		if err := appManager.Start(); err != nil {
-			errCh <- err
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		// log.Println("shutdown signal received")
-
-	case err := <-errCh:
-		log.Fatal("error app start:", err)
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := appManager.Stop(shutdownCtx); err != nil {
-		log.Fatal("error app shutdown:", err)
+	if err := app.Run(ctx, *cfg, applicationLog); err != nil {
+		log.Fatal("error running application:", err)
 	}
 }
 

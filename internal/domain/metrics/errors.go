@@ -8,6 +8,7 @@ var (
 	ErrMetricNotFound         = errors.New("metric not found")
 	ErrMetricNameIsEmpty      = errors.New("metric name is empty")
 	ErrInvalidMetricType      = errors.New("invalid metric type")
+	ErrMetricTypeConflict     = errors.New("metric type conflict")
 	ErrInvalidValueForCounter = errors.New("invalid value for counter metric")
 	ErrInvalidValueForGauge   = errors.New("invalid value for gauge metric")
 

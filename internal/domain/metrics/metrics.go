@@ -5,8 +5,9 @@ package metrics
 type MetricType string
 
 const (
-	Counter MetricType = "counter"
-	Gauge   MetricType = "gauge"
+	MetricTypeCounter MetricType = "counter"
+	MetricTypeGauge   MetricType = "gauge"
+	MetricTypeInvalid MetricType = "invalid"
 )
 
 type GaugeValue float64

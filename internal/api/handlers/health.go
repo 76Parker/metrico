@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/76Parker/metrico/internal/usecase/health"
+	"github.com/76Parker/metrico/internal/applications/health"
 	"github.com/76Parker/metrico/pkg/logger"
 	"github.com/gin-gonic/gin"
 )

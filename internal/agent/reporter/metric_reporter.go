@@ -3,7 +3,6 @@ package reporter
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -76,12 +75,12 @@ func (r *MetricReporter) Run(ctx context.Context) error {
 	}
 }
 
-func (r *MetricReporter) sendMetrics(metrics runtime.MemStats, pollCount int64) error {
-	v := reflect.ValueOf(metrics)
+func (r *MetricReporter) sendMetrics(runtimeMetrics runtime.MemStats, pollCount int64) error {
+	v := reflect.ValueOf(runtimeMetrics)
 	t := v.Type()
-	errs := make([]error, 0, 10)
+	metricsBatch := make([]metrics.Metrics, 0, len(gaugeMetricNames)+1)
 
-	// Отправляет runtime-метрики из MemStats
+	// Собирает runtime-метрики из MemStats
 	for i := 0; i < v.NumField(); i++ {
 		fieldName := t.Field(i).Name // Имя поля берем из типа
 		fieldVal := v.Field(i)       // Значение поля берем из value
@@ -94,51 +93,43 @@ func (r *MetricReporter) sendMetrics(metrics runtime.MemStats, pollCount int64) 
 				case reflect.Float64:
 					metricValue = fieldVal.Float()
 				}
-				if err := r.sendGaugeMetric(metricValue, fieldName); err != nil {
-					errs = append(errs, fmt.Errorf("failed to send gauge metric: name: %s error: %w", fieldName, err))
-				}
+				metricsBatch = append(metricsBatch, newGaugeMetric(metricValue, fieldName))
 			}
 		}
 	}
-	// Отправляем одну Counter-метрику - PollCount
-	if err := r.sendCounterMetric(pollCount, "PollCount"); err != nil {
-		errs = append(errs, fmt.Errorf("failed to send counter metric: name: PollCount error: %w", err))
-	}
-	// Отправляем кастомную Gauge-метрику - RandomValue
-	if err := r.sendGaugeMetric(rand.Float64(), "RandomValue"); err != nil {
-		errs = append(errs, fmt.Errorf("failed to send gauge metric: name: RandomValue error: %w", err))
-	}
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	return nil
+	// Добавляем одну Counter-метрику - PollCount
+	metricsBatch = append(metricsBatch, newCounterMetric(pollCount, "PollCount"))
+	// Добавляем кастомную Gauge-метрику - RandomValue
+	metricsBatch = append(metricsBatch, newGaugeMetric(rand.Float64(), "RandomValue"))
+
+	return r.sendBatch(metricsBatch)
 }
 
-func (r *MetricReporter) sendGaugeMetric(metricValue float64, metricName string) error {
-	return r.sendMetric(metrics.Metrics{
+func newGaugeMetric(metricValue float64, metricName string) metrics.Metrics {
+	return metrics.Metrics{
 		ID:    metricName,
-		Type:  metrics.Gauge,
+		Type:  metrics.MetricTypeGauge,
 		Value: &metricValue,
-	})
+	}
 }
 
-func (r *MetricReporter) sendCounterMetric(metricValue int64, metricName string) error {
-	return r.sendMetric(metrics.Metrics{
+func newCounterMetric(metricValue int64, metricName string) metrics.Metrics {
+	return metrics.Metrics{
 		ID:    metricName,
-		Type:  metrics.Counter,
+		Type:  metrics.MetricTypeCounter,
 		Delta: &metricValue,
-	})
+	}
 }
 
-func (r *MetricReporter) sendMetric(metric metrics.Metrics) error {
-	body, err := goccyjson.Marshal(metric)
+func (r *MetricReporter) sendBatch(metricsBatch []metrics.Metrics) error {
+	body, err := goccyjson.Marshal(metricsBatch)
 	if err != nil {
-		return fmt.Errorf("marshal metric: %w", err)
+		return fmt.Errorf("marshal metric batch: %w", err)
 	}
 
-	request, err := http.NewRequest(http.MethodPost, r.updateURL(), bytes.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, r.batchUpdateURL(), bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create update request: %w", err)
+		return fmt.Errorf("create batch update request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 
@@ -162,9 +153,9 @@ func (r *MetricReporter) sendMetric(metric metrics.Metrics) error {
 	return nil
 }
 
-func (r *MetricReporter) updateURL() string {
+func (r *MetricReporter) batchUpdateURL() string {
 	requestURL := *r.url
-	requestURL.Path = "/update"
+	requestURL.Path = "/updates"
 	requestURL.RawQuery = ""
 	return requestURL.String()
 }

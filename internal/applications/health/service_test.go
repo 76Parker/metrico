@@ -12,9 +12,9 @@ func TestCheckAvailability(t *testing.T) {
 
 	t.Run("valid/available", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		mockDbPinger := NewMockdbPinger(ctrl)
+		mockDbPinger := NewMockDbPinger(ctrl)
 		mockDbPinger.EXPECT().Ping(gomock.Any()).Return(nil)
-		s := NewService(mockDbPinger)
+		s := NewApplication(mockDbPinger)
 		result := s.CheckAvailability(t.Context())
 		assert.NoError(t, result.AvailabilityResults[0].Error)
 		assert.True(t, result.AvailabilityResults[0].IsAvailable)
@@ -22,9 +22,9 @@ func TestCheckAvailability(t *testing.T) {
 
 	t.Run("invalid/unavailable", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
-		mockDbPinger := NewMockdbPinger(ctrl)
+		mockDbPinger := NewMockDbPinger(ctrl)
 		mockDbPinger.EXPECT().Ping(gomock.Any()).Return(errors.New("connection failed"))
-		s := NewService(mockDbPinger)
+		s := NewApplication(mockDbPinger)
 		result := s.CheckAvailability(t.Context())
 		assert.Error(t, result.AvailabilityResults[0].Error)
 		assert.False(t, result.AvailabilityResults[0].IsAvailable)

@@ -9,9 +9,11 @@ import (
 )
 
 type Querier interface {
+	// BatchUpsert через jsonb_to_recordset
+	// Смотрите инструкцию для параметра `BatchUpsertParam` в `internal/adapters/postgres/pgen/custom_params.go`
+	BatchUpsert(ctx context.Context, metrics []byte) error
 	GetByName(ctx context.Context, name string) (MetricMetric, error)
 	List(ctx context.Context) ([]MetricMetric, error)
-	Upsert(ctx context.Context, arg UpsertParams) error
 }
 
 var _ Querier = (*Queries)(nil)
