@@ -229,6 +229,36 @@ func TestUpdateMetricJSONSetsJSONContentType(t *testing.T) {
 	}, got)
 }
 
+func TestBatchUpdateMetricJSON(t *testing.T) {
+	metricService := newMockMetricsApplication(t)
+	batch := metricsapp.BatchUpdateCommand{
+		{
+			Name:       "Alloc",
+			MetricType: domainmetrics.MetricTypeGauge,
+			Value:      float64Pointer(42.5),
+		},
+		{
+			Name:       "PollCount",
+			MetricType: domainmetrics.MetricTypeCounter,
+			Delta:      int64Pointer(7),
+		},
+	}
+	metricService.EXPECT().BatchUpdate(gomock.Any(), batch).Return(nil)
+	router := createTestRouter(metricService)
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/updates",
+		strings.NewReader(`[{"id":"Alloc","type":"gauge","value":42.5},{"id":"PollCount","type":"counter","delta":7}]`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Contains(t, response.Header().Get("Content-Type"), "application/json")
+}
+
 func float64Pointer(value float64) *float64 {
 	return &value
 }
@@ -251,6 +281,7 @@ func createTestRouter(metricService metricsApplication) *gin.Engine {
 	router := gin.New()
 	router.POST("/update/:metricType/:metricName/:metricValue", metricHandler.Update)
 	router.POST("/update", metricHandler.UpdateFromJSON)
+	router.POST("/updates", metricHandler.BatchUpdateFromJSON)
 	router.POST("/value", metricHandler.GetFromJSON)
 	return router
 }

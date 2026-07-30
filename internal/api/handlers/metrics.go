@@ -85,7 +85,7 @@ func (h *MetricsHandler) Update(c *gin.Context) {
 	}
 	if err := h.metricSvc.Update(c.Request.Context(), cmd); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
-		c.Error(apiErr)
+		c.Error(err)
 		c.Status(apiErr.Status)
 		return
 	}
@@ -130,14 +130,14 @@ func (h *MetricsHandler) UpdateFromJSON(c *gin.Context) {
 	}
 	if err := h.metricSvc.Update(c.Request.Context(), cmd); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
-		c.Error(apiErr)
+		c.Error(err)
 		c.Status(apiErr.Status)
 		return
 	}
 	updatedMetric, err := h.metricSvc.GetByName(c.Request.Context(), metric.ID)
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
-		c.Error(apiErr)
+		c.Error(err)
 		c.Status(apiErr.Status)
 		return
 	}
@@ -174,7 +174,7 @@ func (h *MetricsHandler) BatchUpdateFromJSON(c *gin.Context) {
 	}
 	if err := h.metricSvc.BatchUpdate(c.Request.Context(), batchCommand); err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
-		c.Error(apiErr)
+		c.Error(err)
 		c.Status(apiErr.Status)
 		return
 	}
@@ -209,7 +209,7 @@ func (h *MetricsHandler) GetFromJSON(c *gin.Context) {
 	metric, err := h.metricSvc.GetByName(c.Request.Context(), request.ID)
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
-		c.Error(apiErr)
+		c.Error(err)
 		c.Status(apiErr.Status)
 		return
 	}
@@ -240,7 +240,7 @@ func (h *MetricsHandler) GetByName(c *gin.Context) {
 	metric, err := h.metricSvc.GetByName(c.Request.Context(), metricName)
 	if err != nil {
 		apiErr := apierrs.NewErrorFromService(err)
-		c.Error(apiErr)
+		c.Error(err)
 		c.Status(apiErr.Status)
 		return
 	}
@@ -263,6 +263,7 @@ type metricResponse struct {
 func (h *MetricsHandler) GetAll(c *gin.Context) {
 	metricsSnapshot, err := h.metricSvc.GetAll(c.Request.Context())
 	if err != nil {
+		c.Error(err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
