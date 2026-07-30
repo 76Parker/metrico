@@ -19,3 +19,27 @@ test-total-coverage:
 
 metrics_schema_codegen:
 	go-jsonschema -p $(METRICS_PACKAGE) $(METRICS_SCHEMA) > $(METRICS_GEN_OUTPUT_FILE)
+
+
+gen-mocks-metrics:
+	@mockgen -destination=./internal/applications/metrics/mock_repository_test.go \
+		-package=metrics \
+		-mock_names Repository=MockRepository \
+		./internal/applications/metrics \
+		Repository
+
+# generate `dbPinger` mock for package `application/health`
+gen-mocks-health:
+	@mockgen -destination=./internal/applications/health/mock_db_pinger_test.go \
+		-package=health \
+		-mock_names dbPinger=MockDbPinger \
+		./internal/applications/health \
+		dbPinger
+
+# generate mocks for package `api/handlers`
+gen-mocks-handlers:
+	@mockgen -destination=./internal/api/handlers/mock_metrics_application_test.go \
+		-package=handlers \
+		-mock_names metricsApplication=MockMetricsApplication \
+		./internal/api/handlers \
+		metricsApplication

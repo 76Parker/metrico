@@ -4,8 +4,10 @@ package memstorage
 
 import (
 	"context"
+	"maps"
 	"sync"
 
+	metricsapp "github.com/76Parker/metrico/internal/applications/metrics"
 	"github.com/76Parker/metrico/internal/domain/metrics"
 )
 
@@ -13,6 +15,8 @@ type MemStorage struct {
 	mu      *sync.Mutex
 	metrics map[string]metrics.Metrics
 }
+
+var _ metricsapp.Repository = (*MemStorage)(nil)
 
 func NewMemStorage() *MemStorage {
 	reservation := 1024 // Резервируем место в памяти для 1024 метрик, для избежания лишних аллокаций
@@ -22,21 +26,20 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-// UpdateOrCreate Обновляет или создает метрику с именем metricName
-func (s *MemStorage) UpdateOrCreate(_ context.Context, metricName string, metric metrics.Metrics) error {
-	if metricName == "" {
-		return metrics.ErrMetricNameIsEmpty
-	}
+// Apply применяет пакет изменений метрик.
+func (s *MemStorage) Apply(_ context.Context, changes []metricsapp.Change) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	switch metric.Type {
-	case metrics.Gauge:
-		return s.updateOrCreateGauge(metricName, metric)
-	case metrics.Counter:
-		return s.updateOrCreateCounter(metricName, metric)
-	default:
-		return metrics.ErrInvalidMetricType
+
+	updated := s.cloneMetrics()
+	for _, change := range changes {
+		if err := s.applyChange(updated, change); err != nil {
+			return err
+		}
 	}
+	s.metrics = updated
+
+	return nil
 }
 
 // Get Возвращает метрику по metricName
@@ -63,38 +66,63 @@ func (s *MemStorage) Load(_ context.Context, metricsSlice []metrics.Metrics) err
 	return nil
 }
 
-// updateOrCreateGauge Логика обновления/создания для Gauge-метрик: замещение значения на newValue
-func (s *MemStorage) updateOrCreateGauge(metricName string, metric metrics.Metrics) error {
-	if metric.Value == nil {
-		return metrics.ErrGaugeValueIsNil
+func (s *MemStorage) applyChange(items map[string]metrics.Metrics, change metricsapp.Change) error {
+	metricType := change.MetricType()
+	if metricType == metrics.MetricTypeInvalid {
+		return metrics.ErrInvalidMetricType
 	}
-	if v, ok := s.metrics[metricName]; ok {
-		v.Value = metric.Value
-		s.metrics[metricName] = v
-	} else {
-		s.metrics[metricName] = metric
+	if change.Name() == "" {
+		return metrics.ErrMetricNameIsEmpty
 	}
+	if metric, ok := items[change.Name()]; ok && metric.Type != metricType {
+		return metrics.ErrMetricTypeConflict
+	}
+
+	switch metricType {
+	case metrics.MetricTypeGauge:
+		s.applyGauge(items, change.Name(), change.Value())
+	case metrics.MetricTypeCounter:
+		s.applyCounter(items, change.Name(), change.Delta())
+	}
+
 	return nil
 }
 
-// updateOrCreateCounter Логика обновления/создания для Counter-метрик: увеличение текущего значения на delta
-func (s *MemStorage) updateOrCreateCounter(metricName string, metric metrics.Metrics) error {
-	if metric.Delta == nil {
-		return metrics.ErrCounterValueIsNil
+func (s *MemStorage) applyGauge(items map[string]metrics.Metrics, metricName string, value float64) {
+	if v, ok := items[metricName]; ok {
+		v.Value = &value
+		items[metricName] = v
+	} else {
+		items[metricName] = metrics.Metrics{
+			ID:    metricName,
+			Type:  metrics.MetricTypeGauge,
+			Value: &value,
+		}
 	}
-	if v, ok := s.metrics[metricName]; ok {
-		switch v.Delta {
-		case nil: // На случай если уже существующий счетчик каким-то образом == nil
-			v.Delta = metric.Delta
-		default:
-			newValue := *v.Delta + *metric.Delta
+}
+
+func (s *MemStorage) applyCounter(items map[string]metrics.Metrics, metricName string, delta int64) {
+	if v, ok := items[metricName]; ok {
+		if v.Delta == nil {
+			v.Delta = &delta
+		} else {
+			newValue := *v.Delta + delta
 			v.Delta = &newValue
 		}
-		s.metrics[metricName] = v
+		items[metricName] = v
 	} else {
-		s.metrics[metricName] = metric
+		items[metricName] = metrics.Metrics{
+			ID:    metricName,
+			Type:  metrics.MetricTypeCounter,
+			Delta: &delta,
+		}
 	}
-	return nil
+}
+
+func (s *MemStorage) cloneMetrics() map[string]metrics.Metrics {
+	clone := make(map[string]metrics.Metrics, len(s.metrics))
+	maps.Copy(clone, s.metrics)
+	return clone
 }
 
 // GetAll Возвращает все метрики из хранилища

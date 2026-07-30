@@ -18,15 +18,15 @@ type CheckResult struct {
 	Error error
 }
 
-type Service struct {
+type Application struct {
 	db dbPinger
 }
 
-func NewService(db dbPinger) *Service {
-	return &Service{db: db}
+func NewApplication(db dbPinger) *Application {
+	return &Application{db: db}
 }
 
-func (s *Service) CheckAvailability(ctx context.Context) AvailabilityResult {
+func (s *Application) CheckAvailability(ctx context.Context) AvailabilityResult {
 	err := s.db.Ping(ctx)
 	result := AvailabilityResult{
 		Ready:               err == nil,

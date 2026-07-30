@@ -4,14 +4,11 @@ package metrics
 
 import "github.com/76Parker/metrico/internal/domain/metrics"
 
+type BatchUpdateCommand = []UpdateCommand
+
 type UpdateCommand struct {
 	Name       string
 	MetricType metrics.MetricType
 	Delta      *int64
 	Value      *float64
-}
-
-type GetCommand struct {
-	MetricType metrics.MetricType
-	Name       string
 }

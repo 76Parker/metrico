@@ -25,7 +25,7 @@ func TestStorage_Save(t *testing.T) {
 	}
 	t.Run("valid/counter_with_delta", func(t *testing.T) {
 		s, snapshotPath := newTestStorage(t)
-		testData := []metrics.Metrics{{ID: "requests_total", Type: metrics.Counter, Delta: new(int64(120))}}
+		testData := []metrics.Metrics{{ID: "requests_total", Type: metrics.MetricTypeCounter, Delta: new(int64(120))}}
 		require.NoError(t, s.Save(t.Context(), testData))
 
 		actualSnapshot, err := os.ReadFile(snapshotPath)
@@ -34,7 +34,7 @@ func TestStorage_Save(t *testing.T) {
 	})
 	t.Run("valid/gauge_with_value", func(t *testing.T) {
 		s, snapshotPath := newTestStorage(t)
-		testData := []metrics.Metrics{{ID: "temperature", Type: metrics.Gauge, Value: new(23.7)}}
+		testData := []metrics.Metrics{{ID: "temperature", Type: metrics.MetricTypeGauge, Value: new(23.7)}}
 		require.NoError(t, s.Save(t.Context(), testData))
 
 		actualSnapshot, err := os.ReadFile(snapshotPath)
@@ -43,7 +43,7 @@ func TestStorage_Save(t *testing.T) {
 	})
 	t.Run("invalid/gauge_without_value", func(t *testing.T) {
 		s, snapshotPath := newTestStorage(t)
-		testData := []metrics.Metrics{{ID: "temperature", Type: metrics.Gauge}}
+		testData := []metrics.Metrics{{ID: "temperature", Type: metrics.MetricTypeGauge}}
 		err := s.Save(t.Context(), testData)
 		var jsonschemaValidationError *jsonschema.ValidationError
 		require.ErrorAs(t, err, &jsonschemaValidationError)
@@ -53,7 +53,7 @@ func TestStorage_Save(t *testing.T) {
 	})
 	t.Run("invalid/counter_without_delta", func(t *testing.T) {
 		s, snapshotPath := newTestStorage(t)
-		testData := []metrics.Metrics{{ID: "errors_total", Type: metrics.Counter}}
+		testData := []metrics.Metrics{{ID: "errors_total", Type: metrics.MetricTypeCounter}}
 		err := s.Save(t.Context(), testData)
 		var jsonschemaValidationError *jsonschema.ValidationError
 		require.ErrorAs(t, err, &jsonschemaValidationError)
@@ -73,7 +73,7 @@ func TestStorage_Save(t *testing.T) {
 	})
 	t.Run("invalid/empty_id", func(t *testing.T) {
 		s, snapshotPath := newTestStorage(t)
-		testData := []metrics.Metrics{{ID: "", Type: metrics.Gauge, Value: new(23.7)}}
+		testData := []metrics.Metrics{{ID: "", Type: metrics.MetricTypeGauge, Value: new(23.7)}}
 		err := s.Save(t.Context(), testData)
 		var jsonschemaValidationError *jsonschema.ValidationError
 		require.ErrorAs(t, err, &jsonschemaValidationError)
@@ -99,7 +99,7 @@ func TestStorage_Restore(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedMetrics := []metrics.Metrics{
-			{ID: "test_gauge", Type: metrics.Gauge, Value: new(10.5)},
+			{ID: "test_gauge", Type: metrics.MetricTypeGauge, Value: new(10.5)},
 		}
 		assert.Equal(t, expectedMetrics, actualMetrics)
 	})
@@ -109,7 +109,7 @@ func TestStorage_Restore(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedMetrics := []metrics.Metrics{
-			{ID: "test_counter", Type: metrics.Counter, Delta: new(int64(10))},
+			{ID: "test_counter", Type: metrics.MetricTypeCounter, Delta: new(int64(10))},
 		}
 		assert.Equal(t, expectedMetrics, actualMetrics)
 	})
@@ -119,8 +119,8 @@ func TestStorage_Restore(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedMetrics := []metrics.Metrics{
-			{ID: "test_gauge", Type: metrics.Gauge, Delta: new(int64(10)), Value: new(10.5)},
-			{ID: "test_counter", Type: metrics.Counter, Delta: new(int64(10)), Value: new(10.0)},
+			{ID: "test_gauge", Type: metrics.MetricTypeGauge, Delta: new(int64(10)), Value: new(10.5)},
+			{ID: "test_counter", Type: metrics.MetricTypeCounter, Delta: new(int64(10)), Value: new(10.0)},
 		}
 		assert.Equal(t, expectedMetrics, actualMetrics)
 	})

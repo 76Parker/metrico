@@ -1,6 +1,7 @@
 package apierrs
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
@@ -23,17 +24,36 @@ func NewError(message string, status int) Error {
 }
 
 func NewErrorFromService(err error) Error {
-	switch err {
-	case metrics.ErrMetricNotFound:
-		return NewError(err.Error(), http.StatusNotFound)
-	case metrics.ErrMetricNameIsEmpty,
-		metrics.ErrInvalidMetricType,
-		metrics.ErrInvalidValueForCounter,
-		metrics.ErrInvalidValueForGauge,
-		metrics.ErrGaugeValueIsNil,
-		metrics.ErrCounterValueIsNil:
-		return NewError(err.Error(), http.StatusBadRequest)
+	switch {
+	case errors.Is(err, metrics.ErrMetricNotFound):
+		return NewError(metrics.ErrMetricNotFound.Error(), http.StatusNotFound)
+	case errors.Is(err, metrics.ErrMetricNameIsEmpty),
+		errors.Is(err, metrics.ErrInvalidMetricType),
+		errors.Is(err, metrics.ErrMetricTypeConflict),
+		errors.Is(err, metrics.ErrInvalidValueForCounter),
+		errors.Is(err, metrics.ErrInvalidValueForGauge),
+		errors.Is(err, metrics.ErrGaugeValueIsNil),
+		errors.Is(err, metrics.ErrCounterValueIsNil):
+		return NewError(clientErrorMessage(err), http.StatusBadRequest)
 	default:
 		return NewError("unexpected error", http.StatusInternalServerError)
 	}
+}
+
+func clientErrorMessage(err error) string {
+	for _, domainErr := range []error{
+		metrics.ErrMetricNameIsEmpty,
+		metrics.ErrInvalidMetricType,
+		metrics.ErrMetricTypeConflict,
+		metrics.ErrInvalidValueForCounter,
+		metrics.ErrInvalidValueForGauge,
+		metrics.ErrGaugeValueIsNil,
+		metrics.ErrCounterValueIsNil,
+	} {
+		if errors.Is(err, domainErr) {
+			return domainErr.Error()
+		}
+	}
+
+	return "unexpected error"
 }
