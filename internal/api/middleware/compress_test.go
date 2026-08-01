@@ -22,19 +22,19 @@ func TestCompressOnlySupportedContentTypes(t *testing.T) {
 		compressed  bool
 	}{
 		{
-			name:        "compresses JSON with charset",
+			name:        "valid/compresses_json_with_charset",
 			contentType: "application/json; charset=utf-8",
 			body:        `{"status":"ok"}`,
 			compressed:  true,
 		},
 		{
-			name:        "compresses HTML with charset",
+			name:        "valid/compresses_html_with_charset",
 			contentType: "text/html; charset=utf-8",
 			body:        "<h1>Hello</h1>",
 			compressed:  true,
 		},
 		{
-			name:        "does not compress plain text",
+			name:        "valid/does_not_compress_plain_text",
 			contentType: "text/plain; charset=utf-8",
 			body:        "Hello",
 			compressed:  false,

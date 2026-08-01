@@ -127,22 +127,34 @@ func (r *MetricReporter) sendBatch(metricsBatch []metrics.Metrics) error {
 		return fmt.Errorf("marshal metric batch: %w", err)
 	}
 
-	request, err := http.NewRequest(http.MethodPost, r.batchUpdateURL(), bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create batch update request: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
+	var response *http.Response
+	defer func() {
+		if response != nil {
+			response.Body.Close()
+		}
+	}()
+	err = withRetry(func() error {
+		request, err := http.NewRequest(http.MethodPost, r.batchUpdateURL(), bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("create batch update request: %w", err)
+		}
+		request.Header.Set("Content-Type", "application/json")
 
-	resp, err := r.client.Do(request)
+		resp, err := r.client.Do(request)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		}
+		response = resp
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	contentType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	contentType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil {
 		return fmt.Errorf("parse response content type: %w", err)
 	}

@@ -31,22 +31,25 @@ func (t *metricsRepo) Apply(ctx context.Context, changes []metricapp.Change) err
 	if err != nil {
 		return fmt.Errorf("marshal batch: %w", err)
 	}
+	// Retry-вставка небезопасна - вызываем без retry
 	if err := t.q.BatchUpsert(ctx, batchByte); err != nil {
 		return fmt.Errorf("batch upsert: %w", err)
 	}
-
 	return nil
 }
 
+// makeBatch преобразует список изменений в батч для вставки в базу данных
 func makeBatch(changes []metricapp.Change) (pgen.BatchUpsertParam, error) {
 	batch := make(pgen.BatchUpsertParam, 0, len(changes))
 	indices := make(map[string]int, len(changes))
 	for _, change := range changes {
 		if index, ok := indices[change.Name()]; ok {
+			// Проверяем, что пользователь не отправил одну и ту же метрику с разными типами
 			if batch[index].Type != string(change.MetricType()) {
 				return nil, metrics.ErrMetricTypeConflict
 			}
-
+			// Если 2 метрики с одним ID имеют одинаковый тип, то складываем их значения у counter,
+			// а значение gauge заменяем
 			switch change.MetricType() {
 			case metrics.MetricTypeGauge:
 				value := change.Value()
@@ -55,10 +58,8 @@ func makeBatch(changes []metricapp.Change) (pgen.BatchUpsertParam, error) {
 				delta := *batch[index].Delta + change.Delta()
 				batch[index].Delta = &delta
 			}
-
 			continue
 		}
-
 		batchElem := pgen.BatchUpsertMetric{
 			Name: change.Name(),
 			Type: string(change.MetricType()),
@@ -80,7 +81,16 @@ func makeBatch(changes []metricapp.Change) (pgen.BatchUpsertParam, error) {
 
 func (r *metricsRepo) Get(ctx context.Context, metricName string) (metrics.Metrics, error) {
 
-	metric, err := r.q.GetByName(ctx, metricName)
+	var metric pgen.MetricMetric
+
+	err := withRetry(func() error {
+		m, err := r.q.GetByName(ctx, metricName)
+		if err != nil {
+			return err
+		}
+		metric = m
+		return nil
+	})
 	if err != nil {
 		return metrics.Metrics{}, newGetMetricError(err)
 	}
@@ -101,7 +111,16 @@ func newGetMetricError(err error) error {
 }
 
 func (r *metricsRepo) GetAll(ctx context.Context) ([]metrics.Metrics, error) {
-	listedMetrics, err := r.q.List(ctx)
+
+	var listedMetrics []pgen.MetricMetric
+	err := withRetry(func() error {
+		lm, err := r.q.List(ctx)
+		if err != nil {
+			return err
+		}
+		listedMetrics = lm
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list metrics: %w", err)
 	}

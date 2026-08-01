@@ -48,13 +48,16 @@ func registerHttpRoutes(
 func registerMetricsRoutes(router *gin.Engine, handler *handlers.MetricsHandler, log logger.Logger) {
 	logMW := middleware.WithLogging(log)
 	compressMW := middleware.Compress()
+	handlerName := middleware.HandlerName
+	errHandlerMW := middleware.ErrorHandler()
+
 	router.LoadHTMLGlob("templates/*")
-	router.POST("/update/:metricType/:metricName/:metricValue", logMW, compressMW, handler.Update)
-	router.POST("/value", logMW, compressMW, handler.GetFromJSON)
-	router.POST("/update", logMW, compressMW, handler.UpdateFromJSON)
-	router.POST("/updates", logMW, compressMW, handler.BatchUpdateFromJSON)
-	router.GET("/value/:metricType/:metricName", logMW, compressMW, handler.GetByName)
-	router.GET("/", logMW, compressMW, handler.GetAll)
+	router.POST("/update/:metricType/:metricName/:metricValue", logMW, compressMW, errHandlerMW, handlerName("update_metric"), handler.Update)
+	router.POST("/value", logMW, compressMW, errHandlerMW, handlerName("get_metric_json"), handler.GetFromJSON)
+	router.POST("/update", logMW, compressMW, errHandlerMW, handlerName("update_metric_json"), handler.UpdateFromJSON)
+	router.POST("/updates", logMW, compressMW, errHandlerMW, handlerName("batch_update_metrics"), handler.BatchUpdateFromJSON)
+	router.GET("/value/:metricType/:metricName", logMW, compressMW, errHandlerMW, handlerName("get_metric"), handler.GetByName)
+	router.GET("/", logMW, compressMW, errHandlerMW, handlerName("get_all_metrics"), handler.GetAll)
 }
 
 func registerHealthRoutes(router *gin.Engine, handler *handlers.HealthHandler) {

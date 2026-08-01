@@ -5,6 +5,7 @@ package metrics
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
 )
@@ -33,7 +34,7 @@ func NewCoreService(storage Repository) *CoreService {
 
 // update обновляет/создает метрику в физическом хранилище
 func (s *CoreService) update(ctx context.Context, cmd UpdateCommand) error {
-	mutation, err := s.buildChangeOperation(cmd)
+	mutation, err := buildChangeOperation(cmd)
 	if err != nil {
 		return err
 	}
@@ -47,7 +48,7 @@ func (s *CoreService) update(ctx context.Context, cmd UpdateCommand) error {
 func (s *CoreService) batchUpdate(ctx context.Context, cmd []UpdateCommand) error {
 	changes := make([]Change, 0, len(cmd))
 	for _, c := range cmd {
-		mutation, err := s.buildChangeOperation(c)
+		mutation, err := buildChangeOperation(c)
 		if err != nil {
 			return err
 		}
@@ -74,29 +75,34 @@ func (s *CoreService) getAll(ctx context.Context) ([]metrics.Metrics, error) {
 }
 
 // buildChangeOperation строит операцию изменения для физического хранилища на основе входящей команды
-// и не допускает невалидные операции
-func (s *CoreService) buildChangeOperation(cmd UpdateCommand) (Change, error) {
+// и не допускает невалидные операции и параметры
+func buildChangeOperation(cmd UpdateCommand) (Change, error) {
 	if cmd.Name == "" {
 		return Change{}, metrics.ErrMetricNameIsEmpty
 	}
-	switch cmd.MetricType {
+	if cmd.MetricType == "" {
+		return Change{}, metrics.ErrMetricTypeIsEmpty
+	}
+	switch metrics.MetricType(cmd.MetricType) {
 	case metrics.MetricTypeGauge:
-		if cmd.Value == nil {
+		value, err := strconv.ParseFloat(cmd.Value, 64)
+		if err != nil {
 			return Change{}, metrics.ErrInvalidValueForGauge
 		}
 		return Change{
 			name:  cmd.Name,
 			kind:  ChangeKindSetGauge,
-			value: *cmd.Value,
+			value: value,
 		}, nil
 	case metrics.MetricTypeCounter:
-		if cmd.Delta == nil {
+		delta, err := strconv.ParseInt(cmd.Value, 10, 64)
+		if err != nil {
 			return Change{}, metrics.ErrInvalidValueForCounter
 		}
 		return Change{
 			name:  cmd.Name,
 			kind:  ChangeKindAddCounter,
-			delta: *cmd.Delta,
+			delta: delta,
 		}, nil
 	default:
 		return Change{}, metrics.ErrInvalidMetricType

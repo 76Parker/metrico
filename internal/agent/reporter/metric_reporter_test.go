@@ -71,7 +71,9 @@ func TestSendMetrics_Valid(t *testing.T) {
 }
 
 func TestSendMetrics_Invalid(t *testing.T) {
+	requestCount := 0
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer testServer.Close()
@@ -79,6 +81,7 @@ func TestSendMetrics_Invalid(t *testing.T) {
 	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second)
 	err := reporter.sendMetrics(runtime.MemStats{}, 0)
 	assert.Error(t, err)
+	assert.Equal(t, 1, requestCount)
 }
 
 func TestSendMetrics_InvalidResponseContentType(t *testing.T) {
