@@ -63,7 +63,7 @@ func (h *MetricsHandler) Update(c *gin.Context) {
 }
 
 type updateRequest struct {
-	Name       string          `json:"name"`
+	Name       string          `json:"id"`
 	MetricType string          `json:"type"`
 	Value      json.RawMessage `json:"value"`
 	Delta      json.RawMessage `json:"delta"`
