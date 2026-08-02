@@ -172,7 +172,7 @@ func TestUpdateMetricJSONSetsJSONContentType(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/update",
-		strings.NewReader(`{"name":"RandomValue","type":"gauge","value":1.5}`),
+		strings.NewReader(`{"id":"RandomValue","type":"gauge","value":1.5}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -209,7 +209,7 @@ func TestBatchUpdateMetricJSON(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/updates",
-		strings.NewReader(`[{"name":"Alloc","type":"gauge","value":42.5},{"name":"PollCount","type":"counter","delta":7}]`),
+		strings.NewReader(`[{"id":"Alloc","type":"gauge","value":42.5},{"id":"PollCount","type":"counter","delta":7}]`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
