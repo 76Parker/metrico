@@ -43,19 +43,6 @@ func makeBatch(changes []metricapp.Change) (pgen.BatchUpsertParam, error) {
 	batch := make(pgen.BatchUpsertParam, 0, len(changes))
 	indices := make(map[string]int, len(changes))
 	for _, change := range changes {
-		if index, ok := indices[change.Name()]; ok {
-			// Если 2 метрики с одним ID имеют одинаковый тип, то складываем их значения у counter,
-			// а значение gauge заменяем
-			switch change.MetricType() {
-			case metrics.MetricTypeGauge:
-				value := change.Value()
-				batch[index].Value = &value
-			case metrics.MetricTypeCounter:
-				delta := *batch[index].Delta + change.Delta()
-				batch[index].Delta = &delta
-			}
-			continue
-		}
 		batchElem := pgen.BatchUpsertMetric{
 			Name: change.Name(),
 			Type: string(change.MetricType()),
@@ -67,6 +54,22 @@ func makeBatch(changes []metricapp.Change) (pgen.BatchUpsertParam, error) {
 		case metrics.MetricTypeCounter:
 			delta := change.Delta()
 			batchElem.Delta = &delta
+		}
+
+		if index, ok := indices[change.Name()]; ok {
+			if batch[index].Type != batchElem.Type {
+				batch[index] = batchElem
+				continue
+			}
+
+			switch change.MetricType() {
+			case metrics.MetricTypeGauge:
+				batch[index] = batchElem
+			case metrics.MetricTypeCounter:
+				delta := *batch[index].Delta + *batchElem.Delta
+				batch[index].Delta = &delta
+			}
+			continue
 		}
 		batch = append(batch, batchElem)
 		indices[change.Name()] = len(batch) - 1

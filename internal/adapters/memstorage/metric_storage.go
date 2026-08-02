@@ -85,33 +85,21 @@ func (s *MemStorage) applyChange(items map[string]metrics.Metrics, change metric
 }
 
 func (s *MemStorage) applyGauge(items map[string]metrics.Metrics, metricName string, value float64) {
-	if v, ok := items[metricName]; ok {
-		v.Value = &value
-		items[metricName] = v
-	} else {
-		items[metricName] = metrics.Metrics{
-			ID:    metricName,
-			Type:  metrics.MetricTypeGauge,
-			Value: &value,
-		}
+	items[metricName] = metrics.Metrics{
+		ID:    metricName,
+		Type:  metrics.MetricTypeGauge,
+		Value: &value,
 	}
 }
 
 func (s *MemStorage) applyCounter(items map[string]metrics.Metrics, metricName string, delta int64) {
-	if v, ok := items[metricName]; ok {
-		if v.Delta == nil {
-			v.Delta = &delta
-		} else {
-			newValue := *v.Delta + delta
-			v.Delta = &newValue
-		}
-		items[metricName] = v
-	} else {
-		items[metricName] = metrics.Metrics{
-			ID:    metricName,
-			Type:  metrics.MetricTypeCounter,
-			Delta: &delta,
-		}
+	if metric, ok := items[metricName]; ok && metric.Type == metrics.MetricTypeCounter && metric.Delta != nil {
+		delta += *metric.Delta
+	}
+	items[metricName] = metrics.Metrics{
+		ID:    metricName,
+		Type:  metrics.MetricTypeCounter,
+		Delta: &delta,
 	}
 }
 

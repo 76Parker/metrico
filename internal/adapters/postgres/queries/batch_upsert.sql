@@ -27,6 +27,11 @@ FROM jsonb_to_recordset(sqlc.arg(metrics)::jsonb) AS input(
 )
 ON CONFLICT (name)
 DO UPDATE SET
+    type       = EXCLUDED.type,
     value      = EXCLUDED.value,
-    delta      = COALESCE(EXCLUDED.delta, 0) + COALESCE(metric.metrics.delta, 0),
+    delta      = CASE
+        WHEN EXCLUDED.type = 'counter'
+            THEN COALESCE(metric.metrics.delta, 0) + COALESCE(EXCLUDED.delta, 0)
+        ELSE NULL
+    END,
     updated_at = NOW();
