@@ -44,10 +44,6 @@ func makeBatch(changes []metricapp.Change) (pgen.BatchUpsertParam, error) {
 	indices := make(map[string]int, len(changes))
 	for _, change := range changes {
 		if index, ok := indices[change.Name()]; ok {
-			// Проверяем, что пользователь не отправил одну и ту же метрику с разными типами
-			if batch[index].Type != string(change.MetricType()) {
-				return nil, metrics.ErrMetricTypeConflict
-			}
 			// Если 2 метрики с одним ID имеют одинаковый тип, то складываем их значения у counter,
 			// а значение gauge заменяем
 			switch change.MetricType() {

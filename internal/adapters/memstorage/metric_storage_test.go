@@ -111,35 +111,6 @@ func TestMemStorage_Apply(t *testing.T) {
 
 		require.ErrorIs(t, err, metrics.ErrMetricNameIsEmpty)
 	})
-
-	t.Run("invalid/existing_metric_type_conflict", func(t *testing.T) {
-		storage := newTestMemStorage(t)
-		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
-			metricsapp.NewSetGaugeChange("temperature", 42.5),
-		}))
-
-		err := storage.Apply(t.Context(), []metricsapp.Change{
-			metricsapp.NewAddCounterChange("temperature", 1),
-		})
-
-		require.ErrorIs(t, err, metrics.ErrMetricTypeConflict)
-		metric, getErr := storage.Get(t.Context(), "temperature")
-		require.NoError(t, getErr)
-		require.Equal(t, gaugeMetric("temperature", 42.5), metric)
-	})
-
-	t.Run("invalid/intra_batch_metric_type_conflict_is_atomic", func(t *testing.T) {
-		storage := newTestMemStorage(t)
-
-		err := storage.Apply(t.Context(), []metricsapp.Change{
-			metricsapp.NewSetGaugeChange("temperature", 42.5),
-			metricsapp.NewAddCounterChange("temperature", 1),
-		})
-
-		require.ErrorIs(t, err, metrics.ErrMetricTypeConflict)
-		_, getErr := storage.Get(t.Context(), "temperature")
-		require.ErrorIs(t, getErr, metrics.ErrMetricNotFound)
-	})
 }
 
 func TestMemStorage_Get(t *testing.T) {

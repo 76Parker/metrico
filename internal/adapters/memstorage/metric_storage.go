@@ -74,10 +74,6 @@ func (s *MemStorage) applyChange(items map[string]metrics.Metrics, change metric
 	if change.Name() == "" {
 		return metrics.ErrMetricNameIsEmpty
 	}
-	if metric, ok := items[change.Name()]; ok && metric.Type != metricType {
-		return metrics.ErrMetricTypeConflict
-	}
-
 	switch metricType {
 	case metrics.MetricTypeGauge:
 		s.applyGauge(items, change.Name(), change.Value())

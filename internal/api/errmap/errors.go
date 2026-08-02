@@ -20,7 +20,6 @@ var Registry = registry{
 	metrics.ErrMetricNotFound:         newError("metric not found", CodeNotFound, http.StatusNotFound),
 	metrics.ErrMetricNameIsEmpty:      newError("metric name is empty", CodeEmpty, http.StatusNotFound),
 	metrics.ErrInvalidMetricType:      newError("invalid metric type", CodeInvalidMetricType, http.StatusBadRequest),
-	metrics.ErrMetricTypeConflict:     newError("metric type conflict", CodeTypeConflict, http.StatusBadRequest),
 	metrics.ErrInvalidValueForCounter: newError("invalid value for counter metric", CodeInvalidMetricValue, http.StatusBadRequest),
 	metrics.ErrInvalidValueForGauge:   newError("invalid value for gauge metric", CodeInvalidMetricValue, http.StatusBadRequest),
 	metrics.ErrGaugeValueIsNil:        newError("gauge value is nil", CodeInvalidMetricValue, http.StatusBadRequest),
