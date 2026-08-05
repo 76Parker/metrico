@@ -27,7 +27,6 @@ func (h *HealthHandler) CheckAvailability(c *gin.Context) {
 		c.Status(200)
 		return
 	}
-
 	for _, check := range result.AvailabilityResults {
 		if !check.IsAvailable {
 			h.log.Error("System is not available", "system", check.System, "error", check.Error)

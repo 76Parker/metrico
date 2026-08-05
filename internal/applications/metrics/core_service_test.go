@@ -27,8 +27,8 @@ func TestCoreService_update(t *testing.T) {
 		}
 		cmd := UpdateCommand{
 			Name:       expectedMetricName,
-			MetricType: metrics.MetricTypeGauge,
-			Value:      &expectedValue,
+			MetricType: string(metrics.MetricTypeGauge),
+			Value:      "10",
 		}
 
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)
@@ -61,8 +61,8 @@ func TestCoreService_update(t *testing.T) {
 		}
 		cmd := UpdateCommand{
 			Name:       expectedMetricName,
-			MetricType: metrics.MetricTypeCounter,
-			Delta:      &expectedDelta,
+			MetricType: string(metrics.MetricTypeCounter),
+			Value:      "10",
 		}
 
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)
@@ -85,7 +85,7 @@ func TestCoreService_update(t *testing.T) {
 		expectedMetric := metrics.Metrics{}
 		cmd := UpdateCommand{
 			Name:       expectedMetricName,
-			MetricType: metrics.MetricTypeGauge,
+			MetricType: string(metrics.MetricTypeGauge),
 		}
 
 		mockStorage.EXPECT().Get(gomock.Any(), expectedMetricName).Return(expectedMetric, metrics.ErrMetricNotFound)
@@ -107,7 +107,7 @@ func TestCoreService_update(t *testing.T) {
 		expectedMetric := metrics.Metrics{}
 		cmd := UpdateCommand{
 			Name:       expectedMetricName,
-			MetricType: metrics.MetricTypeCounter,
+			MetricType: string(metrics.MetricTypeCounter),
 		}
 
 		mockStorage.EXPECT().Get(gomock.Any(), expectedMetricName).Return(expectedMetric, metrics.ErrMetricNotFound)
@@ -127,7 +127,7 @@ func TestCoreService_update(t *testing.T) {
 
 		cmd := UpdateCommand{
 			Name:       "test_unknown",
-			MetricType: metrics.MetricType("unknown"),
+			MetricType: string(metrics.MetricType("unknown")),
 		}
 
 		service := NewCoreService(mockStorage)
@@ -155,8 +155,8 @@ func TestCoreService_getByName(t *testing.T) {
 		}
 		cmd := UpdateCommand{
 			Name:       expectedMetricName,
-			MetricType: metrics.MetricTypeGauge,
-			Value:      &expectedValue,
+			MetricType: string(metrics.MetricTypeGauge),
+			Value:      "10",
 		}
 
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)
@@ -191,8 +191,8 @@ func TestCoreService_getAll(t *testing.T) {
 		}
 		cmd := UpdateCommand{
 			Name:       expectedMetricName,
-			MetricType: metrics.MetricTypeGauge,
-			Value:      &expectedValue,
+			MetricType: string(metrics.MetricTypeGauge),
+			Value:      "10",
 		}
 
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)

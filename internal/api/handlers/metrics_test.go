@@ -1,4 +1,4 @@
-package handlers
+package handlers_test
 
 import (
 	"net/http"
@@ -6,11 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/76Parker/metrico/internal/api/handlers"
+	"github.com/76Parker/metrico/internal/api/middleware"
 	metricsapp "github.com/76Parker/metrico/internal/applications/metrics"
 	domainmetrics "github.com/76Parker/metrico/internal/domain/metrics"
 	"github.com/gin-gonic/gin"
 	goccyjson "github.com/goccy/go-json"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
@@ -20,178 +21,138 @@ import (
  * Тесты с постфиксом _Invalid проверяют корректно ли код обрабатывает невалидные входные данные, метод должен возвращать ошибку
  */
 
-func TestUpdateMetric_Valid(t *testing.T) {
-	testCases := []struct {
-		name         string
-		path         string
-		expectedCode int
-		command      metricsapp.UpdateCommand
-	}{
-		{
-			name:         "ValidUpdate",
-			path:         "/update/counter/Test/1",
-			expectedCode: http.StatusOK,
-			command: metricsapp.UpdateCommand{
-				Name:       "Test",
-				MetricType: domainmetrics.MetricTypeCounter,
-				Delta:      int64Pointer(1),
-			},
-		},
-		{
-			name:         "ValidUpdate_2",
-			path:         "/update/counter/tt/500",
-			expectedCode: http.StatusOK,
-			command: metricsapp.UpdateCommand{
-				Name:       "tt",
-				MetricType: domainmetrics.MetricTypeCounter,
-				Delta:      int64Pointer(500),
-			},
-		},
-		{
-			name:         "ValidGaugeUpdate",
-			path:         "/update/gauge/temperature/23.5",
-			expectedCode: http.StatusOK,
-			command: metricsapp.UpdateCommand{
-				Name:       "temperature",
-				MetricType: domainmetrics.MetricTypeGauge,
-				Value:      float64Pointer(23.5),
-			},
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			metricService := newMockMetricsApplication(t)
-			metricService.EXPECT().Update(gomock.Any(), tc.command).Return(nil)
-			router := createTestRouter(metricService)
+func TestUpdateMetric(t *testing.T) {
+	t.Run("valid/updates_counter_metric", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+			Name:       "Test",
+			MetricType: string(domainmetrics.MetricTypeCounter),
+			Value:      "1",
+		}).Return(nil)
 
-			req := httptest.NewRequest("POST", tc.path, nil)
-			rec := httptest.NewRecorder()
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/update/counter/Test/1", "")
+		require.Equal(t, http.StatusOK, response.Code)
+	})
 
-			router.ServeHTTP(rec, req)
-			res := rec.Result()
-			assert.Equal(t, tc.expectedCode, res.StatusCode)
-			res.Body.Close()
-		})
-	}
-}
+	t.Run("valid/updates_counter_metric_with_another_value", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+			Name:       "tt",
+			MetricType: string(domainmetrics.MetricTypeCounter),
+			Value:      "500",
+		}).Return(nil)
 
-func TestUpdateMetric_Invalid(t *testing.T) {
-	testCases := []struct {
-		name         string
-		path         string
-		expectedCode int
-	}{
-		{
-			name:         "InvalidGaugeValue",
-			path:         "/update/gauge/test/12f",
-			expectedCode: http.StatusBadRequest,
-		},
-		{
-			name:         "InvalidCounterValue",
-			path:         "/update/counter/test/12f",
-			expectedCode: http.StatusBadRequest,
-		},
-		{
-			name:         "InvalidMetricName",
-			path:         "/update/counter//1",
-			expectedCode: http.StatusNotFound,
-		},
-		{
-			name:         "InvalidMetricType",
-			path:         "/update/unknown/test/1",
-			expectedCode: http.StatusBadRequest,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			metricService := newMockMetricsApplication(t)
-			router := createTestRouter(metricService)
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/update/counter/tt/500", "")
+		require.Equal(t, http.StatusOK, response.Code)
+	})
 
-			req := httptest.NewRequest("POST", tc.path, nil)
-			rec := httptest.NewRecorder()
-			router.ServeHTTP(rec, req)
-			res := rec.Result()
-			assert.Equal(t, tc.expectedCode, res.StatusCode)
-			res.Body.Close()
-		})
-	}
+	t.Run("valid/updates_gauge_metric", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+			Name:       "temperature",
+			MetricType: string(domainmetrics.MetricTypeGauge),
+			Value:      "23.5",
+		}).Return(nil)
+
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/update/gauge/temperature/23.5", "")
+		require.Equal(t, http.StatusOK, response.Code)
+	})
+
+	t.Run("invalid/gauge_value", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+			Name:       "test",
+			MetricType: string(domainmetrics.MetricTypeGauge),
+			Value:      "12f",
+		}).Return(domainmetrics.ErrInvalidValueForGauge)
+
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/update/gauge/test/12f", "")
+		require.Equal(t, http.StatusBadRequest, response.Code)
+	})
+
+	t.Run("invalid/counter_value", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+			Name:       "test",
+			MetricType: string(domainmetrics.MetricTypeCounter),
+			Value:      "12f",
+		}).Return(domainmetrics.ErrInvalidValueForCounter)
+
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/update/counter/test/12f", "")
+		require.Equal(t, http.StatusBadRequest, response.Code)
+	})
+
+	t.Run("invalid/missing_metric_name", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+			MetricType: string(domainmetrics.MetricTypeCounter),
+			Value:      "1",
+		}).Return(domainmetrics.ErrMetricNameIsEmpty)
+
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/update/counter//1", "")
+		require.Equal(t, http.StatusNotFound, response.Code)
+	})
+
+	t.Run("invalid/metric_type", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
+			Name:       "test",
+			MetricType: "unknown",
+			Value:      "1",
+		}).Return(domainmetrics.ErrInvalidMetricType)
+
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/update/unknown/test/1", "")
+		require.Equal(t, http.StatusBadRequest, response.Code)
+	})
 }
 
 func TestGetMetricByNameJSON(t *testing.T) {
-	tests := []struct {
-		name         string
-		body         string
-		wantStatus   int
-		wantResponse *domainmetrics.Metrics
-		metricName   string
-		metric       domainmetrics.Metrics
-		serviceErr   error
-	}{
-		{
-			name:       "returns gauge metric",
-			body:       `{"id":"LastGC","type":"gauge"}`,
-			wantStatus: http.StatusOK,
-			metricName: "LastGC",
-			metric: domainmetrics.Metrics{
-				ID:    "LastGC",
-				Type:  domainmetrics.MetricTypeGauge,
-				Value: float64Pointer(1744184459),
-			},
-			wantResponse: &domainmetrics.Metrics{
-				ID:    "LastGC",
-				Type:  domainmetrics.MetricTypeGauge,
-				Value: float64Pointer(1744184459),
-			},
-		},
-		{
-			name:       "rejects invalid JSON",
-			body:       `{"id":`,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "rejects empty metric ID",
-			body:       `{"id":"  ","type":"gauge"}`,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "rejects unknown metric type",
-			body:       `{"id":"LastGC","type":"histogram"}`,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "returns not found for missing metric",
-			body:       `{"id":"missing","type":"gauge"}`,
-			wantStatus: http.StatusNotFound,
-			metricName: "missing",
-			serviceErr: domainmetrics.ErrMetricNotFound,
-		},
-	}
+	t.Run("valid/returns_gauge_metric", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		expected := domainmetrics.Metrics{
+			ID:    "LastGC",
+			Type:  domainmetrics.MetricTypeGauge,
+			Value: float64Pointer(1744184459),
+		}
+		metricService.EXPECT().GetByName(gomock.Any(), "LastGC").Return(expected, nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			metricService := newMockMetricsApplication(t)
-			if tt.metricName != "" {
-				metricService.EXPECT().GetByName(gomock.Any(), tt.metricName).Return(tt.metric, tt.serviceErr)
-			}
-			router := createTestRouter(metricService)
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/value", `{"id":"LastGC","type":"gauge"}`)
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Contains(t, response.Header().Get("Content-Type"), "application/json")
 
-			request := httptest.NewRequest(http.MethodPost, "/value", strings.NewReader(tt.body))
-			request.Header.Set("Content-Type", "application/json")
-			response := httptest.NewRecorder()
+		var got domainmetrics.Metrics
+		require.NoError(t, goccyjson.Unmarshal(response.Body.Bytes(), &got))
+		require.Equal(t, expected, got)
+	})
 
-			router.ServeHTTP(response, request)
+	t.Run("invalid/json", func(t *testing.T) {
+		response := serveRequest(t, createTestRouter(newMockMetricsApplication(t)), http.MethodPost, "/value", `{"id":`)
+		require.Equal(t, http.StatusBadRequest, response.Code)
+	})
 
-			require.Equal(t, tt.wantStatus, response.Code)
-			if tt.wantResponse == nil {
-				return
-			}
+	t.Run("invalid/empty_metric_id", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().GetByName(gomock.Any(), "").Return(domainmetrics.Metrics{}, domainmetrics.ErrMetricNameIsEmpty)
 
-			require.Contains(t, response.Header().Get("Content-Type"), "application/json")
-			var got domainmetrics.Metrics
-			require.NoError(t, goccyjson.Unmarshal(response.Body.Bytes(), &got))
-			require.Equal(t, *tt.wantResponse, got)
-		})
-	}
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/value", `{"id":"  ","type":"gauge"}`)
+		require.Equal(t, http.StatusNotFound, response.Code)
+	})
+
+	t.Run("invalid/unknown_metric_type", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().GetByName(gomock.Any(), "LastGC").Return(domainmetrics.Metrics{}, domainmetrics.ErrInvalidMetricType)
+
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/value", `{"id":"LastGC","type":"histogram"}`)
+		require.Equal(t, http.StatusBadRequest, response.Code)
+	})
+
+	t.Run("invalid/metric_not_found", func(t *testing.T) {
+		metricService := newMockMetricsApplication(t)
+		metricService.EXPECT().GetByName(gomock.Any(), "missing").Return(domainmetrics.Metrics{}, domainmetrics.ErrMetricNotFound)
+
+		response := serveRequest(t, createTestRouter(metricService), http.MethodPost, "/value", `{"id":"missing","type":"gauge"}`)
+		require.Equal(t, http.StatusNotFound, response.Code)
+	})
 }
 
 func TestUpdateMetricJSONSetsJSONContentType(t *testing.T) {
@@ -203,8 +164,8 @@ func TestUpdateMetricJSONSetsJSONContentType(t *testing.T) {
 	}
 	metricService.EXPECT().Update(gomock.Any(), metricsapp.UpdateCommand{
 		Name:       "RandomValue",
-		MetricType: domainmetrics.MetricTypeGauge,
-		Value:      float64Pointer(1.5),
+		MetricType: string(domainmetrics.MetricTypeGauge),
+		Value:      "1.5",
 	}).Return(nil)
 	metricService.EXPECT().GetByName(gomock.Any(), "RandomValue").Return(updatedMetric, nil)
 	router := createTestRouter(metricService)
@@ -234,13 +195,13 @@ func TestBatchUpdateMetricJSON(t *testing.T) {
 	batch := metricsapp.BatchUpdateCommand{
 		{
 			Name:       "Alloc",
-			MetricType: domainmetrics.MetricTypeGauge,
-			Value:      float64Pointer(42.5),
+			MetricType: string(domainmetrics.MetricTypeGauge),
+			Value:      "42.5",
 		},
 		{
 			Name:       "PollCount",
-			MetricType: domainmetrics.MetricTypeCounter,
-			Delta:      int64Pointer(7),
+			MetricType: string(domainmetrics.MetricTypeCounter),
+			Value:      "7",
 		},
 	}
 	metricService.EXPECT().BatchUpdate(gomock.Any(), batch).Return(nil)
@@ -259,6 +220,25 @@ func TestBatchUpdateMetricJSON(t *testing.T) {
 	require.Contains(t, response.Header().Get("Content-Type"), "application/json")
 }
 
+func serveRequest(
+	t *testing.T,
+	router *gin.Engine,
+	method string,
+	path string,
+	body string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	if body != "" {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	return response
+}
+
 func float64Pointer(value float64) *float64 {
 	return &value
 }
@@ -267,21 +247,22 @@ func int64Pointer(value int64) *int64 {
 	return &value
 }
 
-func newMockMetricsApplication(t *testing.T) *MockMetricsApplication {
+func newMockMetricsApplication(t *testing.T) *handlers.MockMetricsApplication {
 	t.Helper()
 
-	return NewMockMetricsApplication(gomock.NewController(t))
+	return handlers.NewMockMetricsApplication(gomock.NewController(t))
 }
 
-func createTestRouter(metricService metricsApplication) *gin.Engine {
+func createTestRouter(metricService *handlers.MockMetricsApplication) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
-	metricHandler := NewMetricsHandler(metricService)
+	metricHandler := handlers.NewMetricsHandler(metricService)
 
 	router := gin.New()
-	router.POST("/update/:metricType/:metricName/:metricValue", metricHandler.Update)
-	router.POST("/update", metricHandler.UpdateFromJSON)
-	router.POST("/updates", metricHandler.BatchUpdateFromJSON)
-	router.POST("/value", metricHandler.GetFromJSON)
+	errHandlerMW := middleware.ErrorHandler()
+	router.POST("/update/:metricType/:metricName/:metricValue", errHandlerMW, metricHandler.Update)
+	router.POST("/update", errHandlerMW, metricHandler.UpdateFromJSON)
+	router.POST("/updates", errHandlerMW, metricHandler.BatchUpdateFromJSON)
+	router.POST("/value", errHandlerMW, metricHandler.GetFromJSON)
 	return router
 }

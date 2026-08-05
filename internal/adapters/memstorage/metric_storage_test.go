@@ -50,6 +50,38 @@ func TestMemStorage_Apply(t *testing.T) {
 		require.Equal(t, counterMetric("requests", 3), metric)
 	})
 
+	t.Run("valid/replaces_counter_with_gauge", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewAddCounterChange("metric", 3),
+		}))
+
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("metric", 42.5),
+		}))
+
+		metric, err := storage.Get(t.Context(), "metric")
+		require.NoError(t, err)
+		require.Equal(t, gaugeMetric("metric", 42.5), metric)
+		require.Nil(t, metric.Delta)
+	})
+
+	t.Run("valid/replaces_gauge_with_counter", func(t *testing.T) {
+		storage := newTestMemStorage(t)
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewSetGaugeChange("metric", 42.5),
+		}))
+
+		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
+			metricsapp.NewAddCounterChange("metric", 3),
+		}))
+
+		metric, err := storage.Get(t.Context(), "metric")
+		require.NoError(t, err)
+		require.Equal(t, counterMetric("metric", 3), metric)
+		require.Nil(t, metric.Value)
+	})
+
 	t.Run("valid/mixed_batch", func(t *testing.T) {
 		storage := newTestMemStorage(t)
 
@@ -110,35 +142,6 @@ func TestMemStorage_Apply(t *testing.T) {
 		})
 
 		require.ErrorIs(t, err, metrics.ErrMetricNameIsEmpty)
-	})
-
-	t.Run("invalid/existing_metric_type_conflict", func(t *testing.T) {
-		storage := newTestMemStorage(t)
-		require.NoError(t, storage.Apply(t.Context(), []metricsapp.Change{
-			metricsapp.NewSetGaugeChange("temperature", 42.5),
-		}))
-
-		err := storage.Apply(t.Context(), []metricsapp.Change{
-			metricsapp.NewAddCounterChange("temperature", 1),
-		})
-
-		require.ErrorIs(t, err, metrics.ErrMetricTypeConflict)
-		metric, getErr := storage.Get(t.Context(), "temperature")
-		require.NoError(t, getErr)
-		require.Equal(t, gaugeMetric("temperature", 42.5), metric)
-	})
-
-	t.Run("invalid/intra_batch_metric_type_conflict_is_atomic", func(t *testing.T) {
-		storage := newTestMemStorage(t)
-
-		err := storage.Apply(t.Context(), []metricsapp.Change{
-			metricsapp.NewSetGaugeChange("temperature", 42.5),
-			metricsapp.NewAddCounterChange("temperature", 1),
-		})
-
-		require.ErrorIs(t, err, metrics.ErrMetricTypeConflict)
-		_, getErr := storage.Get(t.Context(), "temperature")
-		require.ErrorIs(t, getErr, metrics.ErrMetricNotFound)
 	})
 }
 
