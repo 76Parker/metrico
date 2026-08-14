@@ -73,6 +73,43 @@ func TestVerifyAndSign(t *testing.T) {
 		}
 	})
 
+	t.Run("unsigned request is passed through and response is signed", func(t *testing.T) {
+		requestBody := []byte(`{"id":"Alloc"}`)
+		responseBody := []byte(`{"value":1}`)
+		handlerCalled := false
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handlerCalled = true
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			if string(body) != string(requestBody) {
+				t.Fatalf("handler received body %q, want %q", body, requestBody)
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(responseBody)
+		})
+		request := httptest.NewRequest(http.MethodPost, "/value/", bytes.NewReader(requestBody))
+		response := httptest.NewRecorder()
+
+		VerifyAndSign(handler, key).ServeHTTP(response, request)
+
+		if !handlerCalled {
+			t.Fatal("handler was not called")
+		}
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+		if got := response.Header().Get("Content-Type"); got != "application/json" {
+			t.Fatalf("content type = %q, want %q", got, "application/json")
+		}
+		if got := response.Header().Get(HashSHA256Header); got != signature.Sum(responseBody, key) {
+			t.Fatalf("response hash = %q, want %q", got, signature.Sum(responseBody, key))
+		}
+	})
+
 	t.Run("empty key leaves requests and responses unchanged", func(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)

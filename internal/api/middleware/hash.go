@@ -54,10 +54,12 @@ func VerifyAndSign(next http.Handler, key string) http.Handler {
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := readAndRestoreBody(w, r)
-		if err != nil || !isValidSignature(r.Header.Get(HashSHA256Header), body, key) {
-			writeSignedResponse(w, http.StatusBadRequest, nil, key, r.Method)
-			return
+		if actualSignature := r.Header.Get(HashSHA256Header); actualSignature != "" {
+			body, err := readAndRestoreBody(w, r)
+			if err != nil || !isValidSignature(actualSignature, body, key) {
+				writeSignedResponse(w, http.StatusBadRequest, nil, key, r.Method)
+				return
+			}
 		}
 
 		buffer := newResponseBuffer()
