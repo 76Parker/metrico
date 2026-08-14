@@ -24,7 +24,7 @@ func NewRouter(
 func newHttpServer(cfg config.HTTP, router *gin.Engine) *http.Server {
 	return &http.Server{
 		Addr:              cfg.Address,
-		Handler:           router,
+		Handler:           middleware.VerifyAndSign(router, cfg.HashKey),
 		ReadTimeout:       cfg.ReadTimeout,
 		WriteTimeout:      cfg.WriteTimeout,
 		ReadHeaderTimeout: cfg.ReadHeaderTimeout,

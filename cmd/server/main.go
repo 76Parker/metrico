@@ -34,10 +34,12 @@ var (
 	storeInterval   int    // -i (or STORE_INTERVAL env var)
 	restore         bool   // -r (or RESTORE env var)
 	databaseDSN     string // -d (or DATABASE_DSN env var)
+	key             string // -k (or KEY env var)
 )
 
 type envConfig struct {
 	Addr            string `env:"ADDRESS"`
+	Key             string `env:"KEY"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	StoreInterval   int    `env:"STORE_INTERVAL"`
 	Restore         bool   `env:"RESTORE"`
@@ -47,6 +49,9 @@ type envConfig struct {
 func (c *envConfig) applyOverrides() {
 	if _, ok := os.LookupEnv("ADDRESS"); ok {
 		hostPort = c.Addr
+	}
+	if _, ok := os.LookupEnv("KEY"); ok {
+		key = c.Key
 	}
 	if _, ok := os.LookupEnv("FILE_STORAGE_PATH"); ok {
 		fileStoragePath = c.FileStoragePath
@@ -82,6 +87,7 @@ func main() {
 	}
 	// Flag parsing
 	flag.StringVar(&hostPort, "a", defaultAddr, "HTTP listener address")               // -a
+	flag.StringVar(&key, "k", "", "Hash key")                                          // -k
 	flag.StringVar(&fileStoragePath, "f", defaultFileStoragePath, "file storage path") // -f
 	flag.IntVar(&storeInterval, "i", defaultStoreInterval, "store interval")           // -i
 	flag.BoolVar(&restore, "r", defaultRestore, "restore from file")                   // -r
@@ -99,6 +105,7 @@ func main() {
 	}
 
 	cfg.HttpConfig.Address = hostPort
+	cfg.HttpConfig.HashKey = key
 	cfg.SnapshotServiceConfig = config.SnapshotService{
 		StoreInterval:   time.Duration(storeInterval) * time.Second,
 		FileStoragePath: fileStoragePath,

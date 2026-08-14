@@ -5,7 +5,7 @@ import "github.com/76Parker/metrico/internal/domain/metrics"
 type ChangeKind int
 
 const (
-	ChangeKindInvalid    ChangeKind = iota // Неизвестный тип мутации метрики
+	ChangeKindInvalid    ChangeKind = iota // Неизвестный тип изменения метрики
 	ChangeKindSetGauge                     // устанавливает значение для gauge-метрики
 	ChangeKindAddCounter                   // увеличивает значение counter-метрики
 )
@@ -46,7 +46,7 @@ func (c Change) MetricType() metrics.MetricType {
 	}
 }
 
-func newSetGaugeMutation(name string, value float64) Change {
+func newSetGaugeChange(name string, value float64) Change {
 	return Change{
 		name:  name,
 		kind:  ChangeKindSetGauge,
@@ -56,18 +56,16 @@ func newSetGaugeMutation(name string, value float64) Change {
 
 // NewSetGaugeChange creates a change that sets a gauge value.
 func NewSetGaugeChange(name string, value float64) Change {
-	return newSetGaugeMutation(name, value)
+	return newSetGaugeChange(name, value)
 }
 
-func newAddCounterMutation(name string, delta int64) Change {
+func newAddCounterChange(name string, delta int64) Change {
 	return Change{
 		name:  name,
 		kind:  ChangeKindAddCounter,
 		delta: delta,
 	}
 }
-
-// NewAddCounterChange creates a change that adds delta to a counter.
 func NewAddCounterChange(name string, delta int64) Change {
-	return newAddCounterMutation(name, delta)
+	return newAddCounterChange(name, delta)
 }

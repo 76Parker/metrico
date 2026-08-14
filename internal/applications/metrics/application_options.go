@@ -4,8 +4,8 @@ package metrics
 type ApplicationOption func(*Application)
 
 // WithSnapshotter устанавливает snapshotter для Application
-func WithSnapshotter(snapshotter snapshotter) ApplicationOption {
+func WithSnapshotter(notifier changeNotifier) ApplicationOption {
 	return func(app *Application) {
-		app.snapshotter = snapshotter
+		app.metricsChangeNotifier = notifier
 	}
 }
