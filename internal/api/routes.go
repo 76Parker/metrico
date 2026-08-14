@@ -53,11 +53,17 @@ func registerMetricsRoutes(router *gin.Engine, handler *handlers.MetricsHandler,
 
 	router.LoadHTMLGlob("templates/*")
 	router.POST("/update/:metricType/:metricName/:metricValue", logMW, compressMW, errHandlerMW, handlerName("update_metric"), handler.Update)
-	router.POST("/value", logMW, compressMW, errHandlerMW, handlerName("get_metric_json"), handler.GetFromJSON)
-	router.POST("/update", logMW, compressMW, errHandlerMW, handlerName("update_metric_json"), handler.UpdateFromJSON)
-	router.POST("/updates", logMW, compressMW, errHandlerMW, handlerName("batch_update_metrics"), handler.BatchUpdateFromJSON)
+	registerPostRoutes(router, []string{"/value", "/value/"}, logMW, compressMW, errHandlerMW, handlerName("get_metric_json"), handler.GetFromJSON)
+	registerPostRoutes(router, []string{"/update", "/update/"}, logMW, compressMW, errHandlerMW, handlerName("update_metric_json"), handler.UpdateFromJSON)
+	registerPostRoutes(router, []string{"/updates", "/updates/"}, logMW, compressMW, errHandlerMW, handlerName("batch_update_metrics"), handler.BatchUpdateFromJSON)
 	router.GET("/value/:metricType/:metricName", logMW, compressMW, errHandlerMW, handlerName("get_metric"), handler.GetByName)
 	router.GET("/", logMW, compressMW, errHandlerMW, handlerName("get_all_metrics"), handler.GetAll)
+}
+
+func registerPostRoutes(router *gin.Engine, paths []string, handlers ...gin.HandlerFunc) {
+	for _, path := range paths {
+		router.POST(path, handlers...)
+	}
 }
 
 func registerHealthRoutes(router *gin.Engine, handler *handlers.HealthHandler) {
