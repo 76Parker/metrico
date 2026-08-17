@@ -30,11 +30,7 @@ func NewMetricProviderWithContext(ctx context.Context, pollInterval time.Duratio
 }
 
 // Start запускает цикл сбора метрик в отдельной горутине (не блокирующая операция)
-func (mp *MetricProvider) Start(contexts ...context.Context) {
-	ctx := context.Background()
-	if len(contexts) > 0 && contexts[0] != nil {
-		ctx = contexts[0]
-	}
+func (mp *MetricProvider) Start(ctx context.Context) {
 	timer := time.NewTicker(mp.pollInterval)
 	go func() {
 		defer timer.Stop()
