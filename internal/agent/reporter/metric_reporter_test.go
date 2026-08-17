@@ -1,11 +1,13 @@
 package reporter
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +17,41 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMetricReporter_RunLimitsConcurrentRequests(t *testing.T) {
+	var active, maxActive int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := atomic.AddInt32(&active, 1)
+		for {
+			previous := atomic.LoadInt32(&maxActive)
+			if current <= previous || atomic.CompareAndSwapInt32(&maxActive, previous, current) {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+		atomic.AddInt32(&active, -1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	reporter := NewMetricReporterWithOptions(server.URL, server.Client(), staticProvider{}, time.Millisecond, "", 2, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		cancel()
+	}()
+	if err := reporter.Run(ctx); err != context.Canceled {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+	if got := atomic.LoadInt32(&maxActive); got > 2 {
+		t.Fatalf("max concurrent requests = %d, want <= 2", got)
+	}
+}
+
+type staticProvider struct{}
+
+func (staticProvider) Metrics() (runtime.MemStats, int64) { return runtime.MemStats{}, 1 }
 
 /*
  * Тесты с постфиксом _Valid проверяют корректно ли код обрабатывает валидные входные данные

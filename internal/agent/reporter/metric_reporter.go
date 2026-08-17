@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
@@ -31,6 +32,10 @@ type metricProvider interface {
 	Metrics() (gaugeMetrics runtime.MemStats, pollCount int64)
 }
 
+type systemMetricProvider interface {
+	Metrics() []metrics.Metrics
+}
+
 // MetricReporter отправляет собранные метрики от MetricsProvider'a на сервер
 type MetricReporter struct {
 	client         *http.Client
@@ -38,6 +43,8 @@ type MetricReporter struct {
 	reportInterval time.Duration
 	url            *url.URL
 	provider       metricProvider
+	systemProvider systemMetricProvider
+	rateLimit      int
 }
 
 // NewMetricReporter создает новый MetricReporter с заданным URL и клиентом
@@ -48,16 +55,33 @@ func NewMetricReporter(
 	reportInterval time.Duration,
 	key string,
 ) *MetricReporter {
+	return NewMetricReporterWithOptions(serverAddr, client, provider, reportInterval, key, 1, nil)
+}
+
+func NewMetricReporterWithOptions(
+	serverAddr string,
+	client *http.Client,
+	provider metricProvider,
+	reportInterval time.Duration,
+	key string,
+	rateLimit int,
+	systemProvider systemMetricProvider,
+) *MetricReporter {
 	baseURL, err := url.Parse(serverAddr)
 	if err != nil {
 		return nil
+	}
+	if rateLimit <= 0 {
+		rateLimit = 1
 	}
 	return &MetricReporter{
 		client:         client,
 		key:            key,
 		url:            baseURL,
 		provider:       provider,
+		systemProvider: systemProvider,
 		reportInterval: reportInterval,
+		rateLimit:      rateLimit,
 	}
 }
 
@@ -65,13 +89,36 @@ func NewMetricReporter(
 func (r *MetricReporter) Run(ctx context.Context) error {
 	reportTicker := time.NewTicker(r.reportInterval)
 	defer reportTicker.Stop()
+	jobs := make(chan []metrics.Metrics, r.rateLimit)
+	var workers sync.WaitGroup
+	for i := 0; i < r.rateLimit; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for batch := range jobs {
+				if err := r.sendBatch(batch); err != nil {
+					log.Print(err)
+				}
+			}
+		}()
+	}
+	defer func() {
+		close(jobs)
+		workers.Wait()
+	}()
 
 	for {
 		select {
 		case <-reportTicker.C:
-			metrics, pollCount := r.provider.Metrics()
-			if err := r.sendMetrics(metrics, pollCount); err != nil {
-				log.Print(err)
+			runtimeMetrics, pollCount := r.provider.Metrics()
+			batch := r.metricsBatch(runtimeMetrics, pollCount)
+			if r.systemProvider != nil {
+				batch = append(batch, r.systemProvider.Metrics()...)
+			}
+			select {
+			case jobs <- batch:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		case <-ctx.Done():
 			return ctx.Err()
@@ -80,6 +127,10 @@ func (r *MetricReporter) Run(ctx context.Context) error {
 }
 
 func (r *MetricReporter) sendMetrics(runtimeMetrics runtime.MemStats, pollCount int64) error {
+	return r.sendBatch(r.metricsBatch(runtimeMetrics, pollCount))
+}
+
+func (r *MetricReporter) metricsBatch(runtimeMetrics runtime.MemStats, pollCount int64) []metrics.Metrics {
 	v := reflect.ValueOf(runtimeMetrics)
 	t := v.Type()
 	metricsBatch := make([]metrics.Metrics, 0, len(gaugeMetricNames)+1)
@@ -106,7 +157,7 @@ func (r *MetricReporter) sendMetrics(runtimeMetrics runtime.MemStats, pollCount 
 	// Добавляем кастомную Gauge-метрику - RandomValue
 	metricsBatch = append(metricsBatch, newGaugeMetric(rand.Float64(), "RandomValue"))
 
-	return r.sendBatch(metricsBatch)
+	return metricsBatch
 }
 
 func newGaugeMetric(metricValue float64, metricName string) metrics.Metrics {
