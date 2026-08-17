@@ -77,7 +77,7 @@ func newApplication(ctx context.Context, cfg config.Config, log logger.Logger) (
 	}
 
 	metricsApplication := metrics.NewApplication(
-		metrics.NewCoreService(storage.repository),
+		metrics.NewService(storage.repository),
 		metricsOptions...,
 	)
 	healthApplication := health.NewApplication(storage.healthPinger)

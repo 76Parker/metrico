@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
+	"github.com/76Parker/metrico/internal/signature"
 	goccyjson "github.com/goccy/go-json"
 )
 
@@ -33,6 +34,7 @@ type metricProvider interface {
 // MetricReporter отправляет собранные метрики от MetricsProvider'a на сервер
 type MetricReporter struct {
 	client         *http.Client
+	key            string
 	reportInterval time.Duration
 	url            *url.URL
 	provider       metricProvider
@@ -44,6 +46,7 @@ func NewMetricReporter(
 	client *http.Client,
 	provider metricProvider,
 	reportInterval time.Duration,
+	key string,
 ) *MetricReporter {
 	baseURL, err := url.Parse(serverAddr)
 	if err != nil {
@@ -51,6 +54,7 @@ func NewMetricReporter(
 	}
 	return &MetricReporter{
 		client:         client,
+		key:            key,
 		url:            baseURL,
 		provider:       provider,
 		reportInterval: reportInterval,
@@ -139,6 +143,9 @@ func (r *MetricReporter) sendBatch(metricsBatch []metrics.Metrics) error {
 			return fmt.Errorf("create batch update request: %w", err)
 		}
 		request.Header.Set("Content-Type", "application/json")
+		if r.key != "" {
+			request.Header.Set(signature.HeaderName, signature.Sum(body, r.key))
+		}
 
 		resp, err := r.client.Do(request)
 		if err != nil {

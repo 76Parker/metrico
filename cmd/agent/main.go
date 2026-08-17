@@ -27,10 +27,12 @@ var (
 	pollInterval   time.Duration
 	reportInterval time.Duration
 	addr           string
+	key            string
 )
 
 type envConfig struct {
 	ServerAddress  string `env:"ADDRESS"`
+	Key            string `env:"KEY"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 }
@@ -38,6 +40,9 @@ type envConfig struct {
 func (e *envConfig) redefineConfigFromEnv() {
 	if _, ok := os.LookupEnv("ADDRESS"); ok {
 		addr = e.ServerAddress
+	}
+	if _, ok := os.LookupEnv("KEY"); ok {
+		key = e.Key
 	}
 	if _, ok := os.LookupEnv("REPORT_INTERVAL"); ok {
 		reportInterval = time.Duration(e.ReportInterval) * time.Second
@@ -53,6 +58,7 @@ func main() {
 	defer stop()
 	var pollSeconds, reportSeconds int
 	flag.StringVar(&addr, "a", defaultAddr, "Listener address")
+	flag.StringVar(&key, "k", "", "Hash key")
 	flag.IntVar(&pollSeconds, "p", int(defaultPollInterval/time.Second), "Poll interval for metric provider in seconds")
 	flag.IntVar(&reportSeconds, "r", int(defaultReportInterval/time.Second), "Report interval for metric reporter in seconds")
 	flag.Parse()
@@ -73,7 +79,7 @@ func main() {
 		addr = "http://" + addr
 	}
 	provider := provider.NewMetricProvider(pollInterval)
-	reporter := reporter.NewMetricReporter(addr, httpClient, provider, reportInterval)
+	reporter := reporter.NewMetricReporter(addr, httpClient, provider, reportInterval, key)
 	if err := reporter.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatal(err)
 	}

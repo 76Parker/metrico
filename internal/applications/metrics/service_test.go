@@ -34,7 +34,7 @@ func TestCoreService_update(t *testing.T) {
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)
 		mockStorage.EXPECT().Get(gomock.Any(), expectedMetricName).Return(expectedMetric, nil)
 
-		service := NewCoreService(mockStorage)
+		service := NewService(mockStorage)
 		err := service.update(t.Context(), cmd)
 		require.NoError(t, err)
 
@@ -68,7 +68,7 @@ func TestCoreService_update(t *testing.T) {
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)
 		mockStorage.EXPECT().Get(gomock.Any(), expectedMetricName).Return(expectedMetric, nil)
 
-		service := NewCoreService(mockStorage)
+		service := NewService(mockStorage)
 		err := service.update(t.Context(), cmd)
 		require.NoError(t, err)
 
@@ -90,7 +90,7 @@ func TestCoreService_update(t *testing.T) {
 
 		mockStorage.EXPECT().Get(gomock.Any(), expectedMetricName).Return(expectedMetric, metrics.ErrMetricNotFound)
 
-		service := NewCoreService(mockStorage)
+		service := NewService(mockStorage)
 		err := service.update(t.Context(), cmd)
 		require.ErrorIs(t, err, metrics.ErrInvalidValueForGauge)
 
@@ -112,7 +112,7 @@ func TestCoreService_update(t *testing.T) {
 
 		mockStorage.EXPECT().Get(gomock.Any(), expectedMetricName).Return(expectedMetric, metrics.ErrMetricNotFound)
 
-		service := NewCoreService(mockStorage)
+		service := NewService(mockStorage)
 		err := service.update(t.Context(), cmd)
 		require.ErrorIs(t, err, metrics.ErrInvalidValueForCounter)
 
@@ -130,7 +130,7 @@ func TestCoreService_update(t *testing.T) {
 			MetricType: string(metrics.MetricType("unknown")),
 		}
 
-		service := NewCoreService(mockStorage)
+		service := NewService(mockStorage)
 		err := service.update(t.Context(), cmd)
 		require.ErrorIs(t, err, metrics.ErrInvalidMetricType)
 	})
@@ -162,7 +162,7 @@ func TestCoreService_getByName(t *testing.T) {
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)
 		mockStorage.EXPECT().Get(gomock.Any(), expectedMetricName).Return(expectedMetric, nil)
 
-		service := NewCoreService(mockStorage)
+		service := NewService(mockStorage)
 		err := service.update(t.Context(), cmd)
 		require.NoError(t, err)
 
@@ -198,7 +198,7 @@ func TestCoreService_getAll(t *testing.T) {
 		mockStorage.EXPECT().Apply(gomock.Any(), expectedChange).Return(nil)
 		mockStorage.EXPECT().GetAll(gomock.Any()).Return([]metrics.Metrics{expectedMetric}, nil)
 
-		service := NewCoreService(mockStorage)
+		service := NewService(mockStorage)
 		err := service.update(t.Context(), cmd)
 		require.NoError(t, err)
 

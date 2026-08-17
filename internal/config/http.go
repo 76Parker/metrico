@@ -4,7 +4,8 @@ package config
 import "time"
 
 type HTTP struct {
-	Address           string        `yaml:"address"`
+	Address           string `yaml:"address"`
+	HashKey           string
 	ReadTimeout       time.Duration `yaml:"read_timeout"`
 	WriteTimeout      time.Duration `yaml:"write_timeout"`
 	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout"`

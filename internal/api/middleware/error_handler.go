@@ -5,12 +5,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Middleware для обработки ошибок которые произошли в handler'ах
+// ErrorHandler middleware для обработки ошибок которые произошли в handler'ах
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 		err := c.Errors.Last()
-		// Если нету ошибки и handler уже отдал ответ клиенту, то ничего не делаем
 		if err == nil || c.Writer.Written() {
 			return
 		}

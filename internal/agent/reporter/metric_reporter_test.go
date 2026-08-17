@@ -1,13 +1,16 @@
 package reporter
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
+	"github.com/76Parker/metrico/internal/signature"
 	goccyjson "github.com/goccy/go-json"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,13 +64,37 @@ func TestSendMetrics_Valid(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second)
+	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second, "")
 	err := reporter.sendMetrics(runtime.MemStats{
 		Alloc:         42,
 		GCCPUFraction: 0.5,
 	}, 7)
 	require.NoError(t, err)
 	assert.Equal(t, 1, requestCount)
+}
+
+func TestSendMetrics_WithKey(t *testing.T) {
+	const key = "test-key"
+	client := &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			body, err := io.ReadAll(request.Body)
+			require.NoError(t, err)
+			require.Equal(t, signature.Sum(body, key), request.Header.Get(signature.HeaderName))
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	}
+	reporter := NewMetricReporter("http://metrics.test", client, nil, time.Second, key)
+
+	err := reporter.sendMetrics(runtime.MemStats{}, 0)
+
+	require.NoError(t, err)
 }
 
 func TestSendMetrics_Invalid(t *testing.T) {
@@ -78,7 +105,7 @@ func TestSendMetrics_Invalid(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second)
+	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second, "")
 	err := reporter.sendMetrics(runtime.MemStats{}, 0)
 	assert.Error(t, err)
 	assert.Equal(t, 1, requestCount)
@@ -91,7 +118,7 @@ func TestSendMetrics_InvalidResponseContentType(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second)
+	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second, "")
 
 	assert.Error(t, reporter.sendMetrics(runtime.MemStats{}, 0))
 }
@@ -102,6 +129,12 @@ func float64Pointer(value float64) *float64 {
 
 func int64Pointer(value int64) *int64 {
 	return &value
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
 }
 
 // func TestIntegration(t *testing.T) {
