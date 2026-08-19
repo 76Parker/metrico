@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"runtime"
 	"sync"
 	"time"
@@ -16,24 +17,33 @@ type MetricProvider struct {
 }
 
 func NewMetricProvider(pollInterval time.Duration) *MetricProvider {
+	return NewMetricProviderWithContext(context.Background(), pollInterval)
+}
+
+func NewMetricProviderWithContext(ctx context.Context, pollInterval time.Duration) *MetricProvider {
 
 	p := &MetricProvider{
 		pollInterval: pollInterval,
 	}
-	p.Start()
+	p.Start(ctx)
 	return p
 }
 
 // Start запускает цикл сбора метрик в отдельной горутине (не блокирующая операция)
-func (mp *MetricProvider) Start() {
+func (mp *MetricProvider) Start(ctx context.Context) {
 	timer := time.NewTicker(mp.pollInterval)
 	go func() {
+		defer timer.Stop()
 		for {
-			<-timer.C
-			mp.mu.Lock()
-			mp.pollCount++
-			runtime.ReadMemStats(&mp.metrics)
-			mp.mu.Unlock()
+			select {
+			case <-timer.C:
+				mp.mu.Lock()
+				mp.pollCount++
+				runtime.ReadMemStats(&mp.metrics)
+				mp.mu.Unlock()
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 }
