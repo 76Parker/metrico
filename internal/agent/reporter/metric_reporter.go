@@ -47,42 +47,71 @@ type MetricReporter struct {
 	rateLimit      int
 }
 
-// NewMetricReporter создает новый MetricReporter с заданным URL и клиентом
-func NewMetricReporter(
-	serverAddr string,
-	client *http.Client,
-	provider metricProvider,
-	reportInterval time.Duration,
-	key string,
-) *MetricReporter {
-	return NewMetricReporterWithOptions(serverAddr, client, provider, reportInterval, key, 1, nil)
+// Option конфигурирует MetricReporter.
+type Option func(*MetricReporter)
+
+// WithHTTPClient устанавливает HTTP-клиент.
+func WithHTTPClient(client *http.Client) Option {
+	return func(reporter *MetricReporter) {
+		reporter.client = client
+	}
 }
 
-func NewMetricReporterWithOptions(
+// WithMetricProvider устанавливает источник runtime-метрик.
+func WithMetricProvider(provider metricProvider) Option {
+	return func(reporter *MetricReporter) {
+		reporter.provider = provider
+	}
+}
+
+// WithReportInterval устанавливает интервал отправки метрик.
+func WithReportInterval(reportInterval time.Duration) Option {
+	return func(reporter *MetricReporter) {
+		reporter.reportInterval = reportInterval
+	}
+}
+
+// WithKey устанавливает ключ подписи запросов.
+func WithKey(key string) Option {
+	return func(reporter *MetricReporter) {
+		reporter.key = key
+	}
+}
+
+// WithRateLimit устанавливает число параллельных отправителей.
+func WithRateLimit(rateLimit int) Option {
+	return func(reporter *MetricReporter) {
+		reporter.rateLimit = rateLimit
+	}
+}
+
+// WithSystemMetricProvider устанавливает источник системных метрик.
+func WithSystemMetricProvider(provider systemMetricProvider) Option {
+	return func(reporter *MetricReporter) {
+		reporter.systemProvider = provider
+	}
+}
+
+// NewMetricReporter создает новый MetricReporter с заданным URL и опциями.
+func NewMetricReporter(
 	serverAddr string,
-	client *http.Client,
-	provider metricProvider,
-	reportInterval time.Duration,
-	key string,
-	rateLimit int,
-	systemProvider systemMetricProvider,
+	options ...Option,
 ) *MetricReporter {
 	baseURL, err := url.Parse(serverAddr)
 	if err != nil {
 		return nil
 	}
-	if rateLimit <= 0 {
-		rateLimit = 1
+	reporter := &MetricReporter{
+		url:       baseURL,
+		rateLimit: 1,
 	}
-	return &MetricReporter{
-		client:         client,
-		key:            key,
-		url:            baseURL,
-		provider:       provider,
-		systemProvider: systemProvider,
-		reportInterval: reportInterval,
-		rateLimit:      rateLimit,
+	for _, option := range options {
+		option(reporter)
 	}
+	if reporter.rateLimit <= 0 {
+		reporter.rateLimit = 1
+	}
+	return reporter
 }
 
 // Run запускает бесконеный цикл отправки метрик на сервер (блокирующая операция)

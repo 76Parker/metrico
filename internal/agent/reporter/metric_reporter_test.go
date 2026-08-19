@@ -35,7 +35,13 @@ func TestMetricReporter_RunLimitsConcurrentRequests(t *testing.T) {
 	}))
 	defer server.Close()
 
-	reporter := NewMetricReporterWithOptions(server.URL, server.Client(), staticProvider{}, time.Millisecond, "", 2, nil)
+	reporter := NewMetricReporter(
+		server.URL,
+		WithHTTPClient(server.Client()),
+		WithMetricProvider(staticProvider{}),
+		WithReportInterval(time.Millisecond),
+		WithRateLimit(2),
+	)
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		time.Sleep(30 * time.Millisecond)
@@ -101,7 +107,11 @@ func TestSendMetrics_Valid(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second, "")
+	reporter := NewMetricReporter(
+		testServer.URL,
+		WithHTTPClient(testServer.Client()),
+		WithReportInterval(time.Second),
+	)
 	err := reporter.sendMetrics(runtime.MemStats{
 		Alloc:         42,
 		GCCPUFraction: 0.5,
@@ -127,7 +137,12 @@ func TestSendMetrics_WithKey(t *testing.T) {
 			}, nil
 		}),
 	}
-	reporter := NewMetricReporter("http://metrics.test", client, nil, time.Second, key)
+	reporter := NewMetricReporter(
+		"http://metrics.test",
+		WithHTTPClient(client),
+		WithReportInterval(time.Second),
+		WithKey(key),
+	)
 
 	err := reporter.sendMetrics(runtime.MemStats{}, 0)
 
@@ -142,7 +157,11 @@ func TestSendMetrics_Invalid(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second, "")
+	reporter := NewMetricReporter(
+		testServer.URL,
+		WithHTTPClient(testServer.Client()),
+		WithReportInterval(time.Second),
+	)
 	err := reporter.sendMetrics(runtime.MemStats{}, 0)
 	assert.Error(t, err)
 	assert.Equal(t, 1, requestCount)
@@ -155,7 +174,11 @@ func TestSendMetrics_InvalidResponseContentType(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	reporter := NewMetricReporter(testServer.URL, testServer.Client(), nil, time.Second, "")
+	reporter := NewMetricReporter(
+		testServer.URL,
+		WithHTTPClient(testServer.Client()),
+		WithReportInterval(time.Second),
+	)
 
 	assert.Error(t, reporter.sendMetrics(runtime.MemStats{}, 0))
 }

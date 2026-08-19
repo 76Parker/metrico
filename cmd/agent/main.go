@@ -110,7 +110,15 @@ func main() {
 	}
 	runtimeProvider := provider.NewMetricProviderWithContext(ctx, pollInterval)
 	systemProvider := provider.NewSystemMetricProviderWithContext(ctx, pollInterval)
-	reporter := reporter.NewMetricReporterWithOptions(addr, httpClient, runtimeProvider, reportInterval, key, rateLimit, systemProvider)
+	reporter := reporter.NewMetricReporter(
+		addr,
+		reporter.WithHTTPClient(httpClient),
+		reporter.WithMetricProvider(runtimeProvider),
+		reporter.WithReportInterval(reportInterval),
+		reporter.WithKey(key),
+		reporter.WithRateLimit(rateLimit),
+		reporter.WithSystemMetricProvider(systemProvider),
+	)
 	if err := reporter.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"runtime"
+	"strconv"
 	"testing"
 
 	"github.com/76Parker/metrico/internal/domain/metrics"
@@ -26,21 +27,9 @@ func TestCollectSystemMetrics_IncludesMemoryAndPerCPU(t *testing.T) {
 		t.Fatalf("metric count = %d, want %d", len(got), runtime.NumCPU()+2)
 	}
 	for i := 1; i <= runtime.NumCPU(); i++ {
-		name := "CPUutilization" + itoa(i)
+		name := "CPUutilization" + strconv.Itoa(i)
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("missing CPU metric %q", name)
 		}
 	}
-}
-
-func itoa(value int) string {
-	if value == 0 {
-		return "0"
-	}
-	result := ""
-	for value > 0 {
-		result = string(rune('0'+value%10)) + result
-		value /= 10
-	}
-	return result
 }
